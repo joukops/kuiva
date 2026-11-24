@@ -65,7 +65,7 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
 .camic{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 2px #000}
 .wa{display:flex;flex-direction:column;align-items:center;font:700 11px Barlow,sans-serif;color:#111;text-shadow:0 0 2px #fff,0 0 2px #fff}
 .leaflet-image-layer{image-rendering:auto!important}
-#map{position:relative}.gpsbtn{position:absolute;z-index:1000;right:10px;bottom:34px;width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;background:#fff;color:#444;border:0;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}.gpsbtn.on{color:#1a73e8}.gpsbtn.show{color:#5f6368}.medot{width:16px;height:16px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.5)}
+#map{position:relative}.gpsbtn{width:44px;height:44px;min-height:44px;padding:0;border-radius:6px;background:#fff;color:#444;border:2px solid rgba(0,0,0,.25);background-clip:padding-box;display:flex;align-items:center;justify-content:center;margin-top:10px;cursor:pointer}.gpsbtn.on{color:#1a73e8}.gpsbtn.show{color:#5f6368}.medot{width:16px;height:16px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.5)}
 #testOut td{font-size:14px}
 @media(max-width:600px){.pct{font-size:38px}#map{height:58vh}}
 </style>
@@ -176,7 +176,7 @@ const SITES=[
  {id:'hana',name:'Tempelhof (Hanasaari event field)',lat:60.18286,lon:24.97064,sea:[60,220],shelter:.9,shade:.9,wmax:1.5,alb:.07,maint:true,kind:'plaza'},
  {id:'sompa',name:'Sompasaarenlaituri (cycle path)',lat:60.1805681,lon:24.9733105,sea:[180,330],shelter:.95,shade:.95,wmax:1.5,maint:true,kind:'plaza'},
  {id:'kork2',name:'Korkeasaari plaza (light stone)',lat:60.1770241,lon:24.9823539,sea:[150,300],shelter:.8,shade:.85,wmax:1.2,alb:.3,maint:true,kind:'plaza'},
- {id:'hanl',name:'Hanasaarenlaituri',lat:60.179704,lon:24.9667747,sea:[150,300],shelter:.85,shade:.85,maint:true,kind:'plaza'},
+ {id:'hanl',name:'Hanasaarenlaituri (cycle path)',lat:60.179704,lon:24.9667747,sea:[150,300],shelter:.85,shade:.85,wmax:1.5,maint:true,kind:'plaza'},
  {id:'merl',name:'Merihaanlaituri (cycle path)',lat:60.1783538,lon:24.9619812,sea:[90,240],shelter:.85,shade:.85,wmax:1.5,maint:true,kind:'plaza'},
  {id:'suvp',name:'Suvilahti parkkis',lat:60.1863177,lon:24.9724737,sea:null,shelter:.85,shade:.9,wmax:2,maint:true,tf:.2,kind:'plaza'},
  {id:'suvd',name:'Suvilahti DIY (concrete)',lat:60.1857361,lon:24.9739861,sea:null,shelter:.85,shade:.9,wmax:1.3,alb:.3,maint:false,kind:'field'}];
@@ -936,7 +936,7 @@ map.on('click',e=>{const{lat,lng}=e.latlng;
 map.on('popupclose',()=>hiLayer.clearLayers());
 {const b=document.createElement('button');b.className='gpsbtn';b.title='Show my location';b.setAttribute('aria-label','Show my location');
  b.innerHTML='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
- map.getContainer().appendChild(b);if(L.DomEvent)L.DomEvent.disableClickPropagation(b);
+ const corner=map.getContainer().querySelector('.leaflet-top.leaflet-left');b.classList.add('leaflet-control');(corner||map.getContainer()).appendChild(b);if(!corner){b.style.position='absolute';b.style.zIndex=1000;b.style.left='10px';b.style.top='90px'}if(L.DomEvent)L.DomEvent.disableClickPropagation(b);
  let mode=0,watch=null,dot=null,acc=null,last=null;const meLayer=L.layerGroup().addTo(map);
  const setMode=m=>{mode=m;b.classList.toggle('on',m===1);b.classList.toggle('show',m===2)};
  const stop=()=>{if(watch!=null)navigator.geolocation.clearWatch(watch);watch=null;meLayer.clearLayers();dot=null;acc=null;last=null;setMode(0)};
