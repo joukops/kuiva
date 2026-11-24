@@ -182,11 +182,12 @@ const SITES=[
  {id:'suvd',name:'Suvilahti DIY (concrete)',lat:60.1857361,lon:24.9739861,sea:null,shelter:.85,shade:.9,wmax:1.3,alb:.3,maint:false,kind:'field'}];
 const DEFSPOTS=SITES.map(s=>({...s}));const DEFPOS=Object.fromEntries(SITES.map(s=>[s.id,[s.lat,s.lon]]));
 const KINDS={plaza:{lab:'Plaza or path (no cars)',tf:0,maint:true,wmax:2},street:{lab:'Street with traffic',tf:1,maint:true,wmax:2},field:{lab:'Open field, not cleared of snow',tf:0,maint:false,wmax:2}};
+const SURF={asphalt:{lab:'Ordinary asphalt',wmax:2,alb:.1},smooth:{lab:'Smooth asphalt',wmax:1.5,alb:.1},black:{lab:'Smooth black asphalt',wmax:1.5,alb:.07},stone:{lab:'Stone paving',wmax:1.2,alb:.2},lightstone:{lab:'Light stone paving',wmax:1.2,alb:.3},concrete:{lab:'Concrete',wmax:1.3,alb:.3}};
 let AVGEX=['kt2'];try{const v=localStorage.getItem('dryAvgEx');if(v)AVGEX=JSON.parse(v)}catch(e){}
 let HIDDEN=[];try{HIDDEN=JSON.parse(localStorage.getItem('dryHidden')||'[]')}catch(e){}
 try{let cs=JSON.parse(localStorage.getItem('drySpots')||'[]');
- if(!localStorage.getItem('drySeedKt')){if(!cs.some(c=>c.id==='kt2'))cs.push({id:'kt2',name:'Kansalaistori (stone)',lat:60.1733121,lon:24.9371212,kind:'plaza',wmax:1.2,alb:.2});localStorage.setItem('drySpots',JSON.stringify(cs));localStorage.setItem('drySeedKt','1')}
- for(const c of cs)if(!SITES.some(s=>s.id===c.id))SITES.push({...c,custom:true,maint:KINDS[c.kind]?.maint??true,tf:KINDS[c.kind]?.tf??0,wmax:c.wmax??2,alb:c.alb,sea:null,shelter:.8,shade:.8})}catch(e){}
+ if(!localStorage.getItem('drySeedKt')){if(!cs.some(c=>c.id==='kt2'))cs.push({id:'kt2',name:'Kansalaistori (stone)',lat:60.1733121,lon:24.9371212,kind:'plaza',surf:'stone'});localStorage.setItem('drySpots',JSON.stringify(cs));localStorage.setItem('drySeedKt','1')}
+ for(const c of cs)if(!SITES.some(s=>s.id===c.id))SITES.push({...c,custom:true,maint:KINDS[c.kind]?.maint??true,tf:KINDS[c.kind]?.tf??0,surf:c.surf||(c.id==='kt2'?'stone':'asphalt'),wmax:SURF[c.surf||(c.id==='kt2'?'stone':'asphalt')]?.wmax??c.wmax??2,alb:SURF[c.surf||(c.id==='kt2'?'stone':'asphalt')]?.alb??c.alb,sea:null,shelter:.8,shade:.8})}catch(e){}
 for(let i=SITES.length-1;i>=0;i--)if(HIDDEN.includes(SITES[i].id))SITES.splice(i,1);
 const EXT=[
  {id:'x-hana',name:'Hanasaari power plant, toward Kalasatama and Redi',url:'https://www.webcamtaxi.com/en/finland/uusimaa/helsinki-kalasatama-hanasaari-power-plant.html',lat:60.1862,lon:24.9790},
@@ -735,9 +736,11 @@ function renderSites(){
   +'<p class="meta" style="margin-top:0">'+esc(whyText(s,r))+'</p>'
   +'<p style="margin:0;font-weight:600">'+nextDry(r)+'</p>'
   +strip({p:r.p,W:r.W,wmax:r.P.wmax})
+  +(s.custom?'<label class="chk" style="gap:10px">Surface <select data-surf="'+s.id+'" style="min-height:40px">'+Object.entries(SURF).map(([k,v])=>'<option value="'+k+'"'+((s.surf||'asphalt')===k?' selected':'')+'>'+v.lab+'</option>').join('')+'</select></label>':'')
   +'<label class="chk"><input type="checkbox" data-avg="'+s.id+'"'+(AVGEX.includes(s.id)?'':' checked')+'> Include in average</label>'
   +'<div class="btns"><button data-mv="'+s.id+'">'+(moveId===s.id?'Tap the map…':'Move on map')+'</button><button data-rm="'+s.id+'">Remove</button></div></article>'}).join('');fixMixed()}
-$('sites').addEventListener('change',e=>{const gb=e.target.closest('input[data-grp]');if(gb){const arr=gb.dataset.grp==='all'?SITES:gb.dataset.grp==='def'?SITES.filter(s=>!s.custom):SITES.filter(s=>s.custom);
+$('sites').addEventListener('change',e=>{const sv=e.target.closest('select[data-surf]');if(sv){const s=SITES.find(x=>x.id===sv.dataset.surf);if(s&&SURF[sv.value]){s.surf=sv.value;s.wmax=SURF[sv.value].wmax;s.alb=SURF[sv.value].alb;saveSpots();if(OM){RES[s.id]=simSite(s);renderSites();renderAll()}}return}
+ const gb=e.target.closest('input[data-grp]');if(gb){const arr=gb.dataset.grp==='all'?SITES:gb.dataset.grp==='def'?SITES.filter(s=>!s.custom):SITES.filter(s=>s.custom);
   const ids=arr.map(s=>s.id);AVGEX=AVGEX.filter(x=>!ids.includes(x));if(!gb.checked)AVGEX.push(...ids);ls.set('dryAvgEx',JSON.stringify(AVGEX));renderSites();renderAll();return}
  const c=e.target.closest('input[data-avg]');if(!c)return;const id=c.dataset.avg;AVGEX=AVGEX.filter(x=>x!==id);if(!c.checked)AVGEX.push(id);ls.set('dryAvgEx',JSON.stringify(AVGEX));renderSites();renderAll()});
 function chips(){$('src').innerHTML=Object.entries(src).map(([k,v])=>'<span class="chip '+(v===true?'ok':v==='…'?'wait':'bad')+'">'+esc(k)+(v===true?' ✓':v==='…'?' …':' ✗ '+esc(v))+'</span>').join('')}
@@ -856,11 +859,11 @@ $('cams').addEventListener('click',async e=>{const b=e.target.closest('button');
  else if(b.dataset.a){if(await askClaude(k)){renderCams();recompute()}}});
 $('ext').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const x=EXT[+b.dataset.e];
  if(b.dataset.m)EV[x.id]={cls:b.dataset.m,src:'you',conf:1,t:Date.now()};else delete EV[x.id];saveEV();renderCams();recompute()});
-function saveSpots(){ls.set('drySpots',JSON.stringify(SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind,wmax,alb})=>({id,name,lat,lon,kind,wmax,alb}))));ls.set('dryHidden',JSON.stringify(HIDDEN))}
+function saveSpots(){ls.set('drySpots',JSON.stringify(SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind,surf})=>({id,name,lat,lon,kind,surf}))));ls.set('dryHidden',JSON.stringify(HIDDEN))}
 let addMode=false;
 $('addSpot').addEventListener('click',()=>{addMode=!addMode;moveId=null;const p=$('prog');if(addMode){p.className='move';p.textContent='Tap the map where your new spot is.';map.getContainer().scrollIntoView({behavior:'smooth'})}else{p.className='';p.textContent=''}});
-document.addEventListener('click',e=>{const b=e.target.closest('button[data-newspot]');if(!b)return;const f=b.closest('div.newspot'),nm=(f.querySelector('input').value||'').trim().slice(0,40)||'My spot',kind=f.querySelector('select').value;
- const s={id:'c'+Date.now(),name:nm,lat:+b.dataset.lat,lon:+b.dataset.lon,kind,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:2,sea:null,shelter:.8,shade:.8};
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-newspot]');if(!b)return;const f=b.closest('div.newspot'),nm=(f.querySelector('input').value||'').trim().slice(0,40)||'My spot',kind=f.querySelector('select').value,surf=f.querySelector('.surfsel').value;
+ const s={id:'c'+Date.now(),name:nm,lat:+b.dataset.lat,lon:+b.dataset.lon,kind,surf,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:SURF[surf].wmax,alb:SURF[surf].alb,sea:null,shelter:.8,shade:.8};
  SITES.push(s);saveSpots();map.closePopup();if(OM){RES[s.id]=simSite(s);renderSites();renderMap();renderAll()}});
 function gotoSpot(s){map.getContainer().scrollIntoView({behavior:'smooth',block:'start'});map.setView([s.lat,s.lon],17);
  hiLayer.clearLayers();L.circleMarker([s.lat,s.lon],{radius:22,color:'#ff2d55',weight:3,fill:false,interactive:false}).addTo(hiLayer);setTimeout(()=>hiLayer.clearLayers(),3500)}
@@ -906,13 +909,13 @@ $('logCopy').addEventListener('click',async()=>{const t='DRYLOG '+JSON.stringify
  $('logCopy').textContent=ok?'Copied '+RLOG.length+' reports':'Select the text below';const pre=$('logTxt');pre.textContent=t;pre.style.display=ok?'none':'block'});
 $('logClear').addEventListener('click',()=>{if($('logClear').dataset.sure){RLOG=[];ls.set('dryLog','[]');renderLog();$('logClear').textContent='Clear log';delete $('logClear').dataset.sure}else{$('logClear').dataset.sure=1;$('logClear').textContent='Tap again to clear'}});
 renderLog();
-$('backup').addEventListener('click',async()=>{const data={v:1,spots:SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind})=>({id,name,lat,lon,kind})),pos:Object.fromEntries(SITES.filter(s=>!s.custom).map(s=>[s.id,[s.lat,s.lon]])),hidden:HIDDEN};
+$('backup').addEventListener('click',async()=>{const data={v:1,spots:SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind,surf})=>({id,name,lat,lon,kind,surf})),pos:Object.fromEntries(SITES.filter(s=>!s.custom).map(s=>[s.id,[s.lat,s.lon]])),hidden:HIDDEN};
  const t='DRYSPOTS '+JSON.stringify(data);$('bkBox').style.display='';$('bkTxt').value=t;$('bkLoad').style.display='none';const ok=await copyText(t);
  $('bkMsg').textContent=ok?'Copied. Paste it somewhere safe, like a note or a message to yourself.':'Copy this text and keep it somewhere safe.'});
 $('restoreBtn').addEventListener('click',()=>{$('bkBox').style.display='';$('bkTxt').value='';$('bkMsg').textContent='Paste a backup below, then tap Load.';$('bkLoad').style.display=''});
 $('bkLoad').addEventListener('click',()=>{try{const t=$('bkTxt').value.trim().replace(/^DRYSPOTS\s*/,''),d=JSON.parse(t);if(!d||d.v!==1)throw 0;
   for(let i=SITES.length-1;i>=0;i--)if(SITES[i].custom)SITES.splice(i,1);
-  for(const c of d.spots||[]){const kind=KINDS[c.kind]?c.kind:'plaza';if(typeof c.lat!=='number'||typeof c.lon!=='number')continue;SITES.push({id:String(c.id),name:String(c.name).slice(0,40),lat:c.lat,lon:c.lon,kind,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:2,sea:null,shelter:.8,shade:.8})}
+  for(const c of d.spots||[]){const kind=KINDS[c.kind]?c.kind:'plaza';if(typeof c.lat!=='number'||typeof c.lon!=='number')continue;const sf=SURF[c.surf]?c.surf:(c.id==='kt2'?'stone':'asphalt');SITES.push({id:String(c.id),name:String(c.name).slice(0,40),lat:c.lat,lon:c.lon,kind,surf:sf,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:SURF[sf].wmax,alb:SURF[sf].alb,sea:null,shelter:.8,shade:.8})}
   for(const s of SITES)if(!s.custom&&d.pos&&Array.isArray(d.pos[s.id])){s.lat=+d.pos[s.id][0];s.lon=+d.pos[s.id][1]}
   HIDDEN=Array.isArray(d.hidden)?d.hidden.map(String):[];for(let i=SITES.length-1;i>=0;i--)if(HIDDEN.includes(SITES[i].id))SITES.splice(i,1);
   saveSpots();savePos();$('bkMsg').textContent='Backup loaded.';$('bkLoad').style.display='none';resim()}catch(e){$('bkMsg').textContent='That doesn\'t look like a backup from this app.'}});
@@ -949,7 +952,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button[data-rep]
  logReport(b.dataset.rep,+b.dataset.lat,+b.dataset.lon,'map');EV[id]={cls:b.dataset.rep,src:'you',conf:1,t:Date.now(),lat:+b.dataset.lat,lon:+b.dataset.lon};saveEV();map.closePopup();drawUser();recompute()});
 map.on('click',e=>{const{lat,lng}=e.latlng;
  if(addMode){addMode=false;$('prog').className='';$('prog').textContent='';const la=+lat.toFixed(5),lo=+lng.toFixed(5);
-  L.popup().setLatLng(e.latlng).setContent('<div class="newspot" style="min-width:220px"><b>New spot</b><input type="text" placeholder="Name, e.g. Kumpula street" style="margin:6px 0"><select style="width:100%">'+Object.entries(KINDS).map(([k,v])=>'<option value="'+k+'">'+v.lab+'</option>').join('')+'</select><div class="btns"><button data-newspot="1" data-lat="'+la+'" data-lon="'+lo+'">Save spot</button></div></div>').openOn(map);return}
+  L.popup().setLatLng(e.latlng).setContent('<div class="newspot" style="min-width:220px"><b>New spot</b><input type="text" placeholder="Name, e.g. Kumpula street" style="margin:6px 0"><select style="width:100%">'+Object.entries(KINDS).map(([k,v])=>'<option value="'+k+'">'+v.lab+'</option>').join('')+'</select><select class="surfsel" style="width:100%;margin-top:6px">'+Object.entries(SURF).map(([k,v])=>'<option value="'+k+'">'+v.lab+'</option>').join('')+'</select><div class="btns"><button data-newspot="1" data-lat="'+la+'" data-lon="'+lo+'">Save spot</button></div></div>').openOn(map);return}
  if(moveId){const s=SITES.find(x=>x.id===moveId);s.lat=+lat.toFixed(5);s.lon=+lng.toFixed(5);moveId=null;$('prog').className='';$('prog').textContent='';savePos();saveSpots();resim();return}
  if(!PG)return;const k0=cellOf(lat,lng),h=hi();if(k0<0)return;const k=nearestGround(k0);hiLayer.clearLayers();
  if(k<0){L.popup().setLatLng(e.latlng).setContent(WAT[k0]>140?'Water':'Inside a building block, about '+BH50[k0]+' m tall').openOn(map);return}
