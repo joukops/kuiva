@@ -177,6 +177,8 @@ const SITES=[
  {id:'kork2',name:'Korkeasaari plaza (light stone)',lat:60.1770241,lon:24.9823539,sea:[150,300],shelter:.8,shade:.85,wmax:1.2,alb:.3,maint:true,kind:'plaza'},
  {id:'hanl',name:'Hanasaarenlaituri',lat:60.179704,lon:24.9667747,sea:[150,300],shelter:.85,shade:.85,maint:true,kind:'plaza'},
  {id:'merl',name:'Merihaanlaituri (cycle path)',lat:60.1783538,lon:24.9619812,sea:[90,240],shelter:.85,shade:.85,wmax:1.5,maint:true,kind:'plaza'},
+ {id:'suvp',name:'Suvilahti parkkis',lat:60.1863177,lon:24.9724737,sea:null,shelter:.85,shade:.9,wmax:2,maint:true,tf:.2,kind:'plaza'},
+ {id:'suvd',name:'Suvilahti DIY (concrete)',lat:60.1857361,lon:24.9739861,sea:null,shelter:.85,shade:.9,wmax:1.3,alb:.3,maint:false,kind:'field'},
  {id:'kt2',name:'Kansalaistori (stone)',lat:60.1733121,lon:24.9371212,sea:null,shelter:.55,shade:.75,wmax:1.2,alb:.2,maint:true,kind:'plaza'}];
 const DEFSPOTS=SITES.map(s=>({...s}));const DEFPOS=Object.fromEntries(SITES.map(s=>[s.id,[s.lat,s.lon]]));
 const KINDS={plaza:{lab:'Plaza or path (no cars)',tf:0,maint:true,wmax:2},street:{lab:'Street with traffic',tf:1,maint:true,wmax:2},field:{lab:'Open field, not cleared of snow',tf:0,maint:false,wmax:2}};
@@ -699,15 +701,19 @@ function renderLog(){const L2=RLOG.filter(x=>REPSH[x.rep]!=null&&x.rep!=='snow')
  const n=L2.length;$('logSum').innerHTML=[['Reports',String(RLOG.length)],['Model matched you',n?Math.round(100*ex/n)+' %':'–'],['Within one step',n?Math.round(100*near1/n)+' %':'–'],
   ['Model tends to be',n?(Math.abs(bias/n)<.08?'about right':bias>0?'too dry by '+Math.round(100*bias/n)+' pts':'too wet by '+Math.round(-100*bias/n)+' pts'):'–']].map(([k,v])=>'<div>'+k+'<b>'+v+'</b></div>').join('');
  $('logRows').innerHTML=RLOG.slice(-12).reverse().map(x=>'<tr><td>'+esc(new Date(x.t+'Z').toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Helsinki'}))+'</td><td>'+esc((x.spot||(x.lat+', '+x.lon))+(x.note?' – '+x.note:''))+'</td><td>'+esc((CLS[x.rep]||{}).lab||x.rep)+'</td><td>'+esc((CLS[shCls(x.mod)]||{}).lab)+'</td><td class="n">'+Math.round(x.mod*100)+' %</td></tr>').join('')}
+function grpBoxes(){const g=[['all','All spots',SITES],['def','Default spots',SITES.filter(s=>!s.custom)],['own','Own spots',SITES.filter(s=>s.custom)]];
+ return'<div class="btns" style="gap:4px 16px">'+g.map(([k,l,arr])=>{if(!arr.length)return'';const n=arr.filter(s=>!AVGEX.includes(s.id)).length;
+  return'<label class="chk" style="min-height:36px"><input type="checkbox" data-grp="'+k+'"'+(n===arr.length?' checked':'')+(n>0&&n<arr.length?' data-mixed="1"':'')+'> '+l+'</label>'}).join('')+'</div>'}
 function avgRes(){const inc=SITES.filter(s=>RES[s.id]&&!AVGEX.includes(s.id));if(!inc.length)return null;
  const r={p:[],W:[],Ts:[],n:inc.length,names:inc.map(s=>s.name),wmax:inc.reduce((a,s)=>a+RES[s.id].P.wmax,0)/inc.length};for(let i=H0;i<=H1;i++){let p=0,w=0,t=0;for(const s of inc){const q=RES[s.id];p+=q.p[i];w+=q.W[i];t+=q.Ts[i]}r.p[i]=p/inc.length;r.W[i]=w/inc.length;r.Ts[i]=t/inc.length}return r}
+function fixMixed(){document.querySelectorAll('input[data-grp][data-mixed]').forEach(x=>x.indeterminate=true)}
 function renderSites(){
  const h=hi(),a=Math.max(H0,nowIdx-12),b=Math.min(H1,nowIdx+36),av=avgRes();
  const strip=r=>{let bars='',wb='';for(let i=a;i<=b;i++){bars+='<span style="height:'+Math.max(4,r.p[i]*100)+'%;background:'+rgb(r.p[i])+(i===h?';outline:2px solid var(--ink)':'')+'"></span>';wb+='<span style="height:100%;background:'+WETL[wetLv(r.W[i],r.wmax)].c+'"></span>'}return'<div class="strip">'+bars+'<i class="now" style="left:'+((nowIdx-a)/(b-a+1)*100).toFixed(1)+'%"></i></div><div class="strip" style="height:7px;margin-top:2px" title="How wet the wet parts are">'+wb+'</div><div class="axis"><span>−12 h</span><span>now</span><span>+36 h</span></div>'};
  const wetTxt=(W,wm)=>{const l=wetLv(W,wm);return l?'Wet parts: <b style="color:'+WETL[l].c+'">'+WETL[l].lab+'</b> ('+W.toFixed(2)+' mm)':'No water on the surface'};
  const avgCard=av?'<article class="card site" style="border:2px solid var(--dry);grid-column:1/-1"><div class="top"><div><h2 style="margin:0">Your spots on average</h2><p class="meta" style="margin:2px 0 0">'+av.n+' spot'+(av.n>1?'s':'')+': '+esc(av.names.join(', '))+'</p></div><div class="pct" style="color:'+rgb(av.p[h])+'">'+Math.round(av.p[h]*100)+'%</div></div>'
-  +'<p class="meta">Average share of surface dry · '+wetTxt(av.W[h],av.wmax)+' · pavement '+av.Ts[h].toFixed(1)+' °C</p><p style="margin:0;font-weight:600">'+nextDry(av)+'</p>'+strip(av)+'</article>'
-  :'<article class="card site" style="grid-column:1/-1"><p class="meta" style="margin:0">Tick “Include in average” on at least one spot to see the average.</p></article>';
+  +grpBoxes()+'<p class="meta">Average share of surface dry · '+wetTxt(av.W[h],av.wmax)+' · pavement '+av.Ts[h].toFixed(1)+' °C</p><p style="margin:0;font-weight:600">'+nextDry(av)+'</p>'+strip(av)+'</article>'
+  :'<article class="card site" style="grid-column:1/-1">'+grpBoxes()+'<p class="meta" style="margin:0">Tick “Include in average” on at least one spot to see the average.</p></article>';
  $('sites').innerHTML=avgCard+SITES.map(s=>{const r=RES[s.id];if(!r)return'';const p=r.p[h],c=CLS[r.cls[h]];
   let rr='';if(RAD.size){let s24=0;for(let i=nowIdx-23;i<=nowIdx;i++){const a2=RAD.get(i);if(a2)s24+=radS(a2,r.P.rx,r.P.ry)*gCorr}rr=' · radar rain 24 h '+s24.toFixed(1)+' mm'}
   const cov=haveCover&&r.k>=0?' · open sky '+SVF[r.k]+'%'+(SUN[h].el>0?' · sun now '+Math.round(r.sf[h]*100)+'%':''):'';
@@ -718,8 +724,10 @@ function renderSites(){
   +'<p style="margin:0;font-weight:600">'+nextDry(r)+'</p>'
   +strip({p:r.p,W:r.W,wmax:r.P.wmax})
   +'<label class="chk"><input type="checkbox" data-avg="'+s.id+'"'+(AVGEX.includes(s.id)?'':' checked')+'> Include in average</label>'
-  +'<div class="btns"><button data-mv="'+s.id+'">'+(moveId===s.id?'Tap the map…':'Move on map')+'</button><button data-rm="'+s.id+'">Remove</button></div></article>'}).join('')}
-$('sites').addEventListener('change',e=>{const c=e.target.closest('input[data-avg]');if(!c)return;const id=c.dataset.avg;AVGEX=AVGEX.filter(x=>x!==id);if(!c.checked)AVGEX.push(id);ls.set('dryAvgEx',JSON.stringify(AVGEX));renderSites();renderAll()});
+  +'<div class="btns"><button data-mv="'+s.id+'">'+(moveId===s.id?'Tap the map…':'Move on map')+'</button><button data-rm="'+s.id+'">Remove</button></div></article>'}).join('');fixMixed()}
+$('sites').addEventListener('change',e=>{const gb=e.target.closest('input[data-grp]');if(gb){const arr=gb.dataset.grp==='all'?SITES:gb.dataset.grp==='def'?SITES.filter(s=>!s.custom):SITES.filter(s=>s.custom);
+  const ids=arr.map(s=>s.id);AVGEX=AVGEX.filter(x=>!ids.includes(x));if(!gb.checked)AVGEX.push(...ids);ls.set('dryAvgEx',JSON.stringify(AVGEX));renderSites();renderAll();return}
+ const c=e.target.closest('input[data-avg]');if(!c)return;const id=c.dataset.avg;AVGEX=AVGEX.filter(x=>x!==id);if(!c.checked)AVGEX.push(id);ls.set('dryAvgEx',JSON.stringify(AVGEX));renderSites();renderAll()});
 function chips(){$('src').innerHTML=Object.entries(src).map(([k,v])=>'<span class="chip '+(v===true?'ok':v==='…'?'wait':'bad')+'">'+esc(k)+(v===true?' ✓':v==='…'?' …':' ✗ '+esc(v))+'</span>').join('')}
 function renderCond(){
  const s0=SITES.find(q=>RES[q.id]),F=s0?RES[s0.id].F:forcing(CEN[0],CEN[1]),i=nowIdx,ref=s0||{lat:CEN[0],lon:CEN[1]},stn=STNS.filter(st=>st.data[T[i]]||st.data[T[i]-3600]).sort((a,b)=>km(a.lat,a.lon,ref.lat,ref.lon)-km(b.lat,b.lon,ref.lat,ref.lon))[0],o=stn?(stn.data[T[i]]||stn.data[T[i]-3600]):(FMI[T[i]]||FMI[T[i]-3600]||{});let r24=0;for(let k=Math.max(0,i-23);k<=i;k++)r24+=F.precipitation[k];
