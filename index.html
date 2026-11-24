@@ -100,7 +100,7 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
   <button id="contrast" title="Stretch colours to show small differences">Contrast: auto</button>
   <span class="legend"><span id="lgLo"></span><i id="lgBar"></i><span id="lgHi"></span></span>
   <button id="refresh">Refresh</button>
-  <span class="seg" role="group" aria-label="Core model"><span class="small" style="margin-right:6px">Model</span><button data-core="roadsurf">RoadSurf</button><button data-core="suews">SUEWS</button></span>
+  <span class="seg" role="group" aria-label="Core model"><span class="small" style="margin-right:6px">Model</span><button data-core="roadsurf">RoadSurf</button><button data-core="suews">SUEWS</button><button data-core="metro">METRo</button></span>
 </div>
 <div class="ctl" id="radRow" style="display:none">
   <span id="radT" style="font-weight:600;white-space:nowrap">Radar</span>
@@ -166,13 +166,15 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
     <p class="small"><b>What it’s for.</b> The model assumes surfaces without car traffic: walkways, cycle paths and plazas. Busy streets usually dry faster than shown, and the app doesn’t account for salting or winter grit, so it isn’t suitable for road conditions or ice warnings.</p>
     <p class="small"><b>What counts most.</b> Observations come first, and the forecast only fills gaps and looks ahead. The current surface state comes from Fintraffic road sensors and cameras, which hold the map firmly within a few kilometres of each one. What fell over the last day comes from FMI's rain radar, read every 15 minutes for each 200 m patch and corrected against the Kumpula rain gauge. Radar rain areas are moved forward along their recent track for the next two hours, street by street. For the next nine hours, rain amounts and chances also lean on FMI's own nowcast-based forecast (radar nowcast blended with a rapidly updated model). After that, MET Nordic and FMI Harmonie take over.</p>
     <p class="small"><b>Drying: FMI RoadSurf physics.</b> Each 50 m cell runs a version of the Finnish Meteorological Institute's open-source RoadSurf road weather model (Karsisto 2024), in 20-minute steps from two days back to a day and a half ahead. It balances sunshine, sky and ground heat radiation, heat exchange with the air (driven by wind speed, with RoadSurf's stability corrections) and evaporation against heat conducted through eight road layers. That gives the pavement temperature, including the warmth stored in the asphalt. Water follows RoadSurf's rules: up to 1 mm held in the asphalt's pores plus 1 mm on top, evaporation only when the pavement is at least 0.25 °C and free of snow and ice, instant freezing below 0 °C, gradual melting, rain/sleet/snow split by temperature and humidity, and traffic wearing water, snow and ice off streets (not off plazas and paths). The road layer properties and the conversion from water amount to "share of surface dry" (about 80% dry at 0.08 mm, 50% at 0.25 mm) are my own estimates, because RoadSurf doesn't publish them. Your Dry / Mostly dry / Patchy / Wet reports on the map correct it locally.</p>
-    <p class="small"><b>Second core model: SUEWS-style.</b> The Model switch replaces RoadSurf with a simplified version of the Surface Urban Energy and Water balance Scheme (SUEWS). A paved surface holds about 0.5 mm of water (SUEWS's default store), and anything above drains within minutes. Evaporation is driven by the wind and by the difference between the air's moisture and the vapour pressure at the pavement surface, in proportion to how wet the surface is. The surface temperature comes from the energy balance, so a pavement that cools to the dew point at night stops drying, and below it collects dew. (Standard SUEWS uses the air temperature here, which lets it keep drying all night; this version deliberately differs.) Heat stored in the pavement uses SUEWS's hysteresis method (OHM) instead of a layered road. It has no layered ground model, so ice is flagged only when the air and the estimated surface are at or below freezing. Both cores share all inputs, shading, wind and your reports. Spot cards show both results, and your report log records both, so they can be compared.</p>
+    <p class="small"><b>Second core model: SUEWS-style.</b> The Model switch replaces RoadSurf with a simplified version of the Surface Urban Energy and Water balance Scheme (SUEWS). A paved surface holds about 0.5 mm of water (SUEWS's default store), and anything above drains within minutes. Evaporation is driven by the wind and by the difference between the air's moisture and the vapour pressure at the pavement surface, in proportion to how wet the surface is. The surface temperature comes from the energy balance, so a pavement that cools to the dew point at night stops drying, and below it collects dew. (Standard SUEWS uses the air temperature here, which lets it keep drying all night; this version deliberately differs.) Heat stored in the pavement uses SUEWS's hysteresis method (OHM) instead of a layered road. It has no layered ground model, so ice is flagged only when the air and the estimated surface are at or below freezing. Both cores share all inputs, shading, wind and your reports. </p>
+    <p class="small"><b>Third core model: METRo-style.</b> After Environment Canada's road-weather model METRo. Like RoadSurf it calculates heat flowing through the pavement layer by layer, but it handles the air–surface exchange differently: a standard bulk formula with a stability correction, which usually exchanges heat and moisture more slowly than RoadSurf in light wind. The surface holds at most 0.5 mm of liquid water and the rest runs off. Water evaporates whenever the surface is warmer than the dew point, and dew or frost forms when it is colder. It has no traffic spray. All cores share all inputs, shading, wind and your reports; spot cards show all three results and the report log records all three, so they can be compared.</p>
     <p class="small"><b>Buildings and trees.</b> Building outlines and tree cover in four height classes come from HSY's land cover data. Storey counts come from the City of Helsinki building register (storeys × 3.3 m). Where those can't be loaded, OpenStreetMap is used instead. For each cell and each of 16 directions, the app finds how high the skyline rises. The sun then shines on the cell only when it's above that skyline. Bare trees let more light through in winter than in leaf. The same skyline gives the share of open sky, which sets how much the pavement cools at night. RoadSurf itself has no wind direction or neighbourhood, so the app adds street-canyon physics in the style of the Town Energy Balance (TEB) urban model: the part of the sky hidden by buildings is replaced by walls that radiate heat (slightly warmer than the air in the heating season), sunlit facades reflect light down onto the street, wind at street level is slowed by the canyon's height-to-width ratio, canyon air is a little warmer than above the roofs, and streets get a small amount of traffic heat. In addition, upwind buildings and trees shelter a cell for about ten times their height, and open water upwind speeds the wind up. Shading uses RoadSurf's own method: direct sun is switched off when the skyline in the sun's direction is higher than the sun, and diffuse light and night-time cooling are scaled by the share of open sky.</p>
     <p class="small">These are physics-based estimates that haven't been checked against measurements; use them to compare places and times. The app can't see winter grit (sepeli) or local puddles.</p>
       <p class="small"><b>Sources.</b></p>
     <ul class="small" style="margin-top:0;padding-left:20px">
      <li>Drying physics: FMI’s RoadSurf road weather model, <a href="https://gmd.copernicus.org/articles/17/4837/2024/" target="_blank" rel="noopener">Karsisto 2024 (Geosci. Model Dev.)</a> · <a href="https://github.com/fmidev/RoadSurf" target="_blank" rel="noopener">RoadSurf source code</a></li>
      <li>Second core: SUEWS, <a href="https://suews.readthedocs.io/" target="_blank" rel="noopener">documentation</a> · <a href="https://github.com/UMEP-dev/SUEWS" target="_blank" rel="noopener">source code</a></li>
+     <li>Third core: METRo, <a href="https://framagit.org/metroprojects/metro" target="_blank" rel="noopener">source code and documentation</a></li>
      <li>Street-canyon effects, after the Town Energy Balance model: <a href="https://github.com/TEB-model/teb" target="_blank" rel="noopener">TEB on GitHub</a></li>
      <li>Rain radar, weather stations and forecasts: <a href="https://en.ilmatieteenlaitos.fi/open-data" target="_blank" rel="noopener">FMI open data</a> · <a href="https://en.ilmatieteenlaitos.fi/open-data-manual-radar-data" target="_blank" rel="noopener">FMI radar data</a> · <a href="https://en.ilmatieteenlaitos.fi/rainmap" target="_blank" rel="noopener">FMI rain map</a></li>
      <li>Forecast models: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (MET Nordic) · <a href="https://api.met.no/" target="_blank" rel="noopener">MET Norway</a></li>
@@ -591,8 +593,46 @@ function diffuse(G){/* backward-Euler heat conduction, surface flux G into layer
  for(let k=0;k<NL;k++){const up=k>0?KI[k-1]:0,dn=KI[k],c=CDZ[k]/DTS;ta_[k]=-up;tb_[k]=c+up+dn;tc_[k]=k<NL-1?-dn:0;td_[k]=c*TL[k]+(k===0?G:0)+(k===NL-1?dn*TDEEP:0)}
  for(let k=1;k<NL;k++){const m=ta_[k]/tb_[k-1];tb_[k]-=m*tc_[k-1];td_[k]-=m*td_[k-1]}
  TL[NL-1]=td_[NL-1]/tb_[NL-1];for(let k=NL-2;k>=0;k--)TL[k]=(td_[k]-tc_[k]*TL[k+1])/tb_[k]}
-let CORE=ls.get('dryCore')==='suews'?'suews':'roadsurf';
-function sim(lat,lon,P,F,out,core){return(core||CORE)==='suews'?simSU(lat,lon,P,F,out):simRS(lat,lon,P,F,out)}
+const CORES={roadsurf:'RoadSurf',suews:'SUEWS',metro:'METRo'},coreLbl=c=>({roadsurf:'RoadSurf',suews:'SUEWS-style',metro:'METRo-style'})[c];
+let CORE=CORES[ls.get('dryCore')]?ls.get('dryCore'):'roadsurf';
+function sim(lat,lon,P,F,out,core){const c=core||CORE;return c==='suews'?simSU(lat,lon,P,F,out):c==='metro'?simME(lat,lon,P,F,out):simRS(lat,lon,P,F,out)}
+/* ---- METRo-style core (after Environment Canada's Model of the Environment and Temperature of Roads): layered road heat conduction, Louis bulk exchange, 0.5 mm liquid reservoir, evaporation and condensation at the surface temperature, no traffic spray ---- */
+function simME(lat,lon,P,F,out){
+ const nd=nudges(lat,lon),WM=.5,z0=.005,LZ=Math.log(2/z0),CN=KV*KV/(LZ*LZ);
+ {const t0=F.temperature_2m[H0];let z=0;for(let k=0;k<NL;k++){z+=DZ[k]/2;TL[k]=t0+(TDEEP-t0)*Math.min(1,z/1.6);z+=DZ[k]/2}}
+ let W=.1,S=(F.snow_depth[H0]||0)*100*.7*(P.maint?.1:.5),I=0;
+ for(let i=H0;i<=H1;i++){
+  const ta=F.temperature_2m[i],td=Math.min(F.dew_point_2m[i],ta),cc=clamp(F.cloud_cover[i]/100,0,1),u0=F.wind_speed_10m[i],b=bin16(F.wind_direction_10m[i]),op=P.open(b);
+  const hw=P.hw||0,fc=1-(1-2/Math.PI*Math.exp(-hw/4))*clamp(hw/.5,0,1),u=Math.max(.5,u0*clamp(.75+.7*op-.6*P.obs(b),.2,1.35)*fc),sn=SUN[i],sf=sunFrac(P,sn);
+  const heat=ta<15?1:0,dayT=((new Date(T[i]*1000).getUTCHours()+2)%24),tfHeat=P.tf*(dayT>=7&&dayT<22?10:3);
+  const dir=F.direct_radiation?F.direct_radiation[i]:0,dif=F.diffuse_radiation?F.diffuse_radiation[i]:F.shortwave_radiation[i];
+  const taK=ta+273.15,eaH=esW(td)*10,ecl=1.24*Math.pow(eaH/taK,1/7),lwSky=(ecl*(1-.9*cc)+.9*cc)*SBC*taK**4,ea=esW(td);
+  let pr=F.precipitation[i]||0;const ra=RAD.get(i);
+  if(ra){const v=radS(ra,P.rx,P.ry)*gCorr,w=i<=nowIdx?1:i===nowIdx+1?.8:.5;pr=w*v+(1-w)*pr}
+  const fr=ta>=1.5?1:ta<=0?0:ta/1.5;
+  for(let st=0;st<3;st++){
+   const ts=TL[0],rho=100000/(287.05*taK),cp=1005,tac=ta+heat*.8*(1-P.sv),ue=Math.max(u*.75,1);
+   const Rib=9.81*2*(tac-ts)/(taK*ue*ue),Fh=Rib<0?1-15*Rib/(1+75*CN*Math.sqrt(-Rib*2/z0)):1/(1+15*Rib*Math.sqrt(1+5*Rib));
+   const ch=CN*Fh*ue+.002,H=rho*cp*ch*(tac-ts)+tfHeat;
+   const frozen=(S>0||I>0)&&ts<=0,dq=((frozen?esI(ts):esW(ts))-ea)*.622/101.3;
+   let LE=rho*2.5e6*ch*dq;
+   const p=pr*DTS/3600;if(p>0){W+=p*fr*(1-.2*P.tree);S+=p*(1-fr)}
+   if(LE>0){if(S>0||I>0){const sb=Math.min(I,LE*.3/2.83e6*DTS);I-=sb;LE=0}else{LE*=Math.min(1,W/WM);const ev=LE/2.5e6*DTS;if(ev>W){LE=W*2.5e6/DTS;W=0}else W-=ev}}
+   else if(LE<0){const c2=-LE*DTS;if(ts>=0)W+=c2/2.5e6;else I+=c2/2.83e6}
+   if(P.maint&&S>.4){const r=Math.min(S,.5*DTS/3600);S-=r;W+=.15*r}
+   W=Math.min(W,WM);S=Math.min(S,100);I=Math.min(I,50);
+   const twK=taK+heat*1.5+(dir>0?.004*dir:0),dirWall=sn.el>2?dir*Math.min(3,1/Math.tan(sn.el*R))*.35:0;
+   const alb=(S>.5||I>1.5)?.6:P.alb,swin=dir*sf+P.sv*dif+(1-P.sv)*.3*(dif+dirWall),lwin=P.sv*lwSky+(1-P.sv)*.9*SBC*twK**4;
+   diffuse((1-alb)*swin+lwin-.95*SBC*(ts+273.15)**4-LE+H);
+   if((S>0||I>0)&&TL[0]>0){let m=TL[0]*CDZ[0]/334000;TL[0]=0;const a=Math.min(S,m);S-=a;m-=a;const c3=Math.min(I,m);I-=c3;m-=c3;W+=a+c3;if(m>0)TL[0]=m*334000/CDZ[0]}
+   if(TL[0]<0&&W>0){I+=W;W=0}}
+  if(i===nowIdx){if(nd.roadT!=null){const off=nd.roadT-TL[0];for(let k=0;k<NL;k++)TL[k]+=off*SHF[k];
+    if(nd.roadT>=.5&&I>0){W+=I;I=0}}
+   if(nd.sw>0){W=Math.min(WM,(W+nd.sW)/(1+nd.sw));S=(S+nd.sS)/(1+nd.sw);I=(I+nd.sI)/(1+nd.sw)}}
+  const ts=TL[0];let q=shareOf(W),c=q>=.85?'dry':q>=.5?'mostly':q>=.2?'damp':'wet';
+  if(S>.3){q=Math.min(q,.02);c='snow'}else if(I>.05){q=Math.min(q,.02);c='ice'}
+  if(i>nowIdx){const pp=(ra&&i<=nowIdx+1)?0:Math.max(F.precipitation_probability[i]||0,F.precipitation_probability[i-1]||0)/100;q*=1-.6*pp;q=.5+(q-.5)*(1-Math.min(.7,Math.min(.4,(i-nowIdx)/72)+(DIS?.5*DIS[i]:0)))}
+  out(i,q,W,S,ts,c,u,sf,pr,I)}}
 /* ---- SUEWS-style core (after the Surface Urban Energy and Water balance Scheme: paved-surface water store, Penman-Monteith evaporation, OHM storage heat) ---- */
 function simSU(lat,lon,P,F,out){
  const nd=nudges(lat,lon),cap=.48*(P.wmax||2)/2,z0=.5,d0=2,LNA=Math.log((10-d0)/z0),LNV=Math.log((10-d0)/(z0/10)),cp=1005;
@@ -676,9 +716,9 @@ function simRS(lat,lon,P,F,out){
   out(i,q,W,S,ts,c,u,sf,pr,I)}}
 function openCell(k){if(k<0||!haveCover||(BLD[k]<100&&WAT[k]<140))return k;const j0=Math.floor(k/NX),i0=k-j0*NX;let best=k,bd=1e9;
  for(let dj=-2;dj<=2;dj++)for(let di=-2;di<=2;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=NX||j>=NY)continue;const q=j*NX+i;if(BLD[q]>=100||WAT[q]>=140)continue;const d=di*di+dj*dj;if(d<bd){bd=d;best=q}}return best}
-function simSite(s){const k=openCell(cellOf(s.lat,s.lon)),P=profOf(k,s,s.lat,s.lon),F=forcing(s.lat,s.lon),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],alt:[],F,P,k};
+function simSite(s){const k=openCell(cellOf(s.lat,s.lon)),P=profOf(k,s,s.lat,s.lon),F=forcing(s.lat,s.lon),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],F,P,k};
  sim(s.lat,s.lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.S[i]=S;r.Ts[i]=ts;r.cls[i]=c;r.u[i]=u;r.sf[i]=sf;r.pr[i]=pr});
- sim(s.lat,s.lon,P,F,(i,q)=>{r.alt[i]=q},CORE==='suews'?'roadsurf':'suews');return r}
+ r.m={};for(const c in CORES){if(c===CORE)r.m[c]=r.p;else{r.m[c]=[];sim(s.lat,s.lon,P,F,(i,q)=>{r.m[c][i]=q},c)}}return r}
 const masked=k=>haveCover&&(WAT[k]>140||BLD[k]>200||(pavedOnly&&ROAD&&IMP&&ROAD[k]+IMP[k]<30));
 async function runGrid(){
  PG=new Uint8Array(N*NH);TG=new Int16Array(N*NH);WG=new Uint8Array(N*NH);SG=new Uint8Array(N*NH);SUNSH=new Uint8Array(N);
@@ -755,19 +795,19 @@ function whyText(s,r){const out=[];let i=nowIdx;while(i>H0&&!(r.pr[i]>.05))i--;
  if(r.cls[nowIdx]==='ice')out.push('water has frozen on the pavement');
  if(DIS){for(let i=nowIdx+1;i<=Math.min(H1,nowIdx+24);i++)if(DIS[i]>.5){out.push('MET Nordic and FMI disagree on rain around '+fmtT(T[i]));break}}return out.join(' · ')}
 const WETL=[{lab:'None',c:'transparent'},{lab:'Damp patches',c:'#9cc7e6'},{lab:'Wet',c:'#4e8fdc'},{lab:'Very wet',c:'#1d4fc4'},{lab:'Standing water',c:'#5b1d9e'}];
-function wetLv(W,wmax){const pore=CORE==='suews'?.48*(wmax||2)/2:Math.max(.3,(wmax||2)-1);if(W<.01)return 0;if(W>=pore*.95)return 4;if(W>=.35)return 3;if(W>=.1)return 2;return 1}
+function wetLv(W,wmax){const pore=CORE==='suews'?.48*(wmax||2)/2:CORE==='metro'?.5:Math.max(.3,(wmax||2)-1);if(W<.01)return 0;if(W>=pore*.95)return 4;if(W>=.35)return 3;if(W>=.1)return 2;return 1}
 /* ---- report log for calibration ---- */
 let RLOG=[];try{RLOG=JSON.parse(localStorage.getItem('dryLog')||'[]')}catch(e){RLOG=[]}
 const REPSH={dry:1,mostly:.8,damp:.5,wet:.1,snow:0};
 const shCls=q=>q>=.85?'dry':q>=.5?'mostly':q>=.2?'damp':'wet';
 function logReport(cls,lat,lon,via,note){if(!OM)return;try{
  const k=cellOf(lat,lon),P=profOf(k,null,lat,lon),F=forcing(lat,lon),r={p:[],W:[],Ts:[],pr:[],c:[]};
- sim(lat,lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.Ts[i]=ts;r.pr[i]=pr;r.c[i]=c});let alt=null;sim(lat,lon,P,F,(i,q)=>{if(i===nowIdx)alt=q},CORE==='suews'?'roadsurf':'suews');
+ sim(lat,lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.Ts[i]=ts;r.pr[i]=pr;r.c[i]=c});const M={};for(const c in CORES){if(c===CORE)M[c]=r.p[nowIdx];else sim(lat,lon,P,F,(i,q)=>{if(i===nowIdx)M[c]=q},c)}
  let lr=-1;for(let i=nowIdx;i>=H0;i--)if(r.pr[i]>.05){lr=nowIdx-i;break}let r24=0;for(let i=Math.max(H0,nowIdx-23);i<=nowIdx;i++)r24+=r.pr[i]||0;
  const near=SITES.map(x=>[x.name,km(lat,lon,x.lat,x.lon)]).sort((a,b)=>a[1]-b[1])[0];
  RLOG.push({t:new Date().toISOString().slice(0,16),lat:+lat.toFixed(5),lon:+lon.toFixed(5),spot:near&&near[1]<.3?near[0]:'',via,rep:cls,
   mod:+r.p[nowIdx].toFixed(2),modCls:r.c[nowIdx],W:+r.W[nowIdx].toFixed(3),Ts:+r.Ts[nowIdx].toFixed(1),Ta:+F.temperature_2m[nowIdx].toFixed(1),Td:+F.dew_point_2m[nowIdx].toFixed(1),
-  ws:+F.wind_speed_10m[nowIdx].toFixed(1),svf:haveCover&&k>=0?SVF[k]:null,road:ROAD&&k>=0?ROAD[k]:null,lastRainH:lr,rain24:+r24.toFixed(2),radar:RAD.size>0,core:CORE,modRS:+(CORE==='suews'?alt:r.p[nowIdx]).toFixed(2),modSU:+(CORE==='suews'?r.p[nowIdx]:alt).toFixed(2),note:note?String(note).slice(0,120):undefined,v:'4.7'});
+  ws:+F.wind_speed_10m[nowIdx].toFixed(1),svf:haveCover&&k>=0?SVF[k]:null,road:ROAD&&k>=0?ROAD[k]:null,lastRainH:lr,rain24:+r24.toFixed(2),radar:RAD.size>0,core:CORE,modRS:+M.roadsurf.toFixed(2),modSU:+M.suews.toFixed(2),modME:+M.metro.toFixed(2),note:note?String(note).slice(0,120):undefined,v:'4.7'});
  if(RLOG.length>1000)RLOG=RLOG.slice(-1000);ls.set('dryLog',JSON.stringify(RLOG));renderLog()}catch(e){}}
 function renderLog(){const L2=RLOG.filter(x=>REPSH[x.rep]!=null&&x.rep!=='snow');
  const cats=['dry','mostly','damp','wet'],idx=c=>cats.indexOf(c);let ex=0,near1=0,bias=0;
@@ -795,7 +835,7 @@ function renderSites(){
   +'<p class="meta" style="color:var(--ink)">'+(r.cls[h]==='snow'||r.cls[h]==='ice'?'Surface: <b>'+c.lab+'</b>':wetTxt(r.W[h],r.P.wmax))+'</p>'
   +'<p class="meta">Pavement '+r.Ts[h].toFixed(1)+' °C · local wind '+r.u[h].toFixed(1)+' m/s'+cov+rr+(r.S[h]>.05?' · snow '+r.S[h].toFixed(1)+' mm':'')+'</p>'
   +'<p class="meta" style="margin-top:0">'+esc(whyText(s,r))+'</p>'
-  +'<p class="meta" style="margin:0 0 6px">Models: <b>RoadSurf '+Math.round((CORE==='suews'?r.alt[h]:r.p[h])*100)+'%</b> · <b>SUEWS '+Math.round((CORE==='suews'?r.p[h]:r.alt[h])*100)+'%</b> dry</p>'
+  +'<p class="meta" style="margin:0 0 6px">Models: '+Object.keys(CORES).map(c=>(c===CORE?'<b>':'')+CORES[c]+' '+Math.round(r.m[c][h]*100)+'%'+(c===CORE?'</b>':'')).join(' · ')+' dry</p>'
   +'<div class="meta" style="margin:0 0 8px">'+rainInfo(s.lat,s.lon).replace(/^<br>/,'')+'</div>'
   +'<p style="margin:0;font-weight:600">'+nextDry(r)+'</p>'
   +strip({p:r.p,W:r.W,wmax:r.P.wmax})
@@ -954,7 +994,7 @@ $('askAll').addEventListener('click',claudeAll);
 $('testBtn').addEventListener('click',runTests);
 function coreBtns(){document.querySelectorAll('button[data-core]').forEach(b=>b.classList.toggle('on',b.dataset.core===CORE))}coreBtns();
 document.querySelectorAll('button[data-core]').forEach(b=>b.addEventListener('click',()=>{if(CORE===b.dataset.core)return;CORE=b.dataset.core;ls.set('dryCore',CORE);coreBtns();
- for(const k of Object.keys(src))if(k.startsWith('Core model:'))delete src[k];src['Core model: '+(CORE==='suews'?'SUEWS-style':'RoadSurf')]=true;recompute()}));
+ for(const k of Object.keys(src))if(k.startsWith('Core model:'))delete src[k];src['Core model: '+coreLbl(CORE)]=true;recompute()}));
 function parseCoord(t){t=String(t||'').trim();let m=t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||t.match(/[?&](?:q|query|ll|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i);if(m)return[+m[1],+m[2]];
  const dms=[...t.matchAll(/(\d+)\s*[°º]\s*(\d+)\s*['′]\s*([\d.]+)\s*["″]?\s*([NSEW])/gi)];
  if(dms.length>=2){const v=dms.slice(0,2).map(d=>{let x=+d[1]+(+d[2])/60+(+d[3])/3600;if(/[SW]/i.test(d[4]))x=-x;return[x,d[4].toUpperCase()]}),la=v.find(x=>/[NS]/.test(x[1])),lo=v.find(x=>/[EW]/.test(x[1]));if(la&&lo)return[la[0],lo[0]]}
@@ -1060,7 +1100,7 @@ async function load(){
  if(!OM){const all=Object.values(src).every(v=>v!==true);
   $('headline').textContent=all?'This view is blocking internet access, so no data could load. Open the page in Chrome or Safari.':'The forecast services could not be reached. Press Refresh to try again.';return}
  const n=Date.now()/1000;nowIdx=0;T.forEach((t,i)=>{if(t<=n)nowIdx=i});H0=Math.max(0,nowIdx-48);H1=Math.min(T.length-1,nowIdx+36);DW0=nowIdx-24;
- blendHarm();blendNow();buildResid();src['Core model: '+(CORE==='suews'?'SUEWS-style':'RoadSurf')]=true;if(omModel)src['Forecast: '+omModel+(HARM?' + FMI Harmonie':'')+(NOWC?' + FMI nowcast':'')+(STNS.length?', corrected by '+RESID.length+' FMI stations':'')]=true;
+ blendHarm();blendNow();buildResid();src['Core model: '+coreLbl(CORE)]=true;if(omModel)src['Forecast: '+omModel+(HARM?' + FMI Harmonie':'')+(NOWC?' + FMI nowcast':'')+(STNS.length?', corrected by '+RESID.length+' FMI stations':'')]=true;
  buildForcing();evidenceList();RES={};for(const s of SITES)RES[s.id]=simSite(s);renderSites();renderCond();drawStations();
  $('headline').textContent='Spots ready, reading radar and building the map…';
  await job('FMI rain radar',loadRadar);if(src['FMI rain radar']!==true){RAD=new Map();radarNum=false;src['FMI rain radar (map only)']=true}
