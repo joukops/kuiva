@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dry Asphalt Helsinki</title>
+<title>Dry Pavement Helsinki</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -72,8 +72,8 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
 </head>
 <body>
 <header>
-  <h1>Dry asphalt, Helsinki</h1>
-  <p class="sub">Estimates how much of the pavement is dry on pedestrian walkways, cycle paths and plazas in Helsinki, street by street, for inline skating. It isn’t a road-condition service: car lanes are dried by traffic and salted, so don’t use it to judge driving conditions or slipperiness for cars.</p>
+  <h1>Dry pavement, Helsinki</h1>
+  <p class="sub">Estimates how much of the pavement is dry on pedestrian walkways, cycle paths and plazas in Helsinki, street by street, for inline skating (<a href="#how" style="color:#f0c75e">how the model works</a>). It isn’t a road-condition service: car lanes are dried by traffic and salted, so don’t use it to judge driving conditions or slipperiness for cars.</p>
   <div id="headline">Loading live data…</div>
 </header>
 <div id="map"></div>
@@ -160,7 +160,7 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
     <p class="small">Model</p><input id="model" type="text" value="claude-haiku-5-5">
     <p><button id="saveKey">Save</button> <button id="askAll">Assess shown cameras now</button></p>
   </details>
-  <details><summary>How the model works</summary>
+  <details id="how"><summary>How the model works</summary>
     <p class="small"><b>What it’s for.</b> The model assumes surfaces without car traffic: walkways, cycle paths and plazas. Busy streets usually dry faster than shown, and the app doesn’t account for salting or winter grit, so it isn’t suitable for road conditions or ice warnings.</p>
     <p class="small"><b>What counts most.</b> Observations come first, and the forecast only fills gaps and looks ahead. The current surface state comes from Fintraffic road sensors and cameras, which hold the map firmly within a few kilometres of each one. What fell over the last day comes from FMI's rain radar, read every 15 minutes for each 200 m patch and corrected against the Kumpula rain gauge. Radar rain areas are moved forward along their recent track for the next two hours, street by street. For the next nine hours, rain amounts and chances also lean on FMI's own nowcast-based forecast (radar nowcast blended with a rapidly updated model). After that, MET Nordic and FMI Harmonie take over.</p>
     <p class="small"><b>Drying: FMI RoadSurf physics.</b> Each 50 m cell runs a version of the Finnish Meteorological Institute's open-source RoadSurf road weather model (Karsisto 2024), in 20-minute steps from two days back to a day and a half ahead. It balances sunshine, sky and ground heat radiation, heat exchange with the air (driven by wind speed, with RoadSurf's stability corrections) and evaporation against heat conducted through eight road layers. That gives the pavement temperature, including the warmth stored in the asphalt. Water follows RoadSurf's rules: up to 1 mm held in the asphalt's pores plus 1 mm on top, evaporation only when the pavement is at least 0.25 °C and free of snow and ice, instant freezing below 0 °C, gradual melting, rain/sleet/snow split by temperature and humidity, and traffic wearing water, snow and ice off streets (not off plazas and paths). The road layer properties and the conversion from water amount to "share of surface dry" (about 80% dry at 0.08 mm, 50% at 0.25 mm) are my own estimates, because RoadSurf doesn't publish them. Your Dry / Mostly dry / Patchy / Wet reports on the map correct it locally.</p>
@@ -169,6 +169,10 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
   </details>
 </section>
 
+<footer class="band" style="border-top:1px solid var(--line);font-size:14px;color:var(--mute)">
+  <p style="margin:0"><a href="#how">How the model works</a> · Data: FMI, Fintraffic, City of Helsinki, HSY, MET Norway / Open-Meteo, OpenStreetMap · <a href="https://github.com/joukops/kuiva" target="_blank" rel="noopener">Source on GitHub</a></p>
+</footer>
+<script>{const o=()=>{if(location.hash==='#how'){const d=document.getElementById('how');if(d){d.open=true;d.scrollIntoView({behavior:'smooth'})}}};addEventListener('hashchange',o);document.addEventListener('click',e=>{const a=e.target.closest('a[href="#how"]');if(a){e.preventDefault();history.replaceState(null,'','#how');o()}});o()}</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 {

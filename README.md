@@ -1,4 +1,4 @@
-# Kuiva – dry asphalt map for Helsinki
+# Kuiva – Dry pavement, Helsinki
 
 Street-level estimate of how much of the pavement is dry on pedestrian walkways, cycle paths and plazas in Helsinki, made for inline skating.
 Not a road-condition service: car lanes dry differently (traffic, salting), so don't use it for driving conditions.
