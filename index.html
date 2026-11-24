@@ -557,7 +557,7 @@ function nudges(lat,lon){let sw=0,sW=0,sS=0,sI=0,ow=0,oo=0;
 function profOf(k,site,lat,lon){
  const rxy=radXY(lat,lon),base={alb:site?.alb??.1,wmax:site?.wmax??2,maint:site?site.maint:true,ri:radOf(lat,lon),rx:rxy[0],ry:rxy[1]};
  if(haveCover&&k>=0)return{...base,open:b=>OPEN[k*16+b]/100,obs:b=>OBS[k*16+b]/100,horB:b=>HORB[k*16+b]/2,horT:b=>HORT[k*16+b]/2,sv:SVF[k]/100,tree:TRE[k]/255,
-  tf:site?(site.tf??0):(ROAD?clamp(ROAD[k]/255*2,0,1):.3),hw:(()=>{let m=0;for(let b=0;b<16;b++)m+=HORB[k*16+b]/2;return clamp(Math.tan(m/16*R),0,3)})()};
+  tf:site?(site.tf??0):(ROAD?clamp(ROAD[k]/255,0,1)*.35:.15),hw:(()=>{let m=0;for(let b=0;b<16;b++)m+=HORB[k*16+b]/2;return clamp(Math.tan(m/16*R),0,3)})()};
  const s=site||{sea:null,shelter:.8,shade:.8};
  return{...base,open:b=>s.sea&&inSec(b*22.5,s.sea)?.5:0,obs:b=>s.sea&&inSec(b*22.5,s.sea)?.05:1-s.shelter,horB:()=>(1-s.shade)*30,horT:()=>0,sv:s.shade,tree:0,tf:site?(site.tf??0):.3,hw:0}}
 function sunFrac(P,sn){if(sn.el<=0)return 0;const b=bin16(sn.az);return sig((sn.el-P.horB(b))/1.2)*(1-TOPAC*(1-sig((sn.el-P.horT(b))/1.2)))}
@@ -966,7 +966,7 @@ map.on('click',e=>{const{lat,lng}=e.latlng;
  if(k!==k0)L.polyline([[lat,lng],cc],{color:'#ff2d55',weight:2,dashArray:'4 4',interactive:false}).addTo(hiLayer);
  const o=(h-DW0)*N+k,F=COARSE[CI[k]],b=bin16(F.wind_direction_10m[h]),P=profOf(k,null,lat,lng),u=F.wind_speed_10m[h]*clamp(.75+.7*P.open(b)-P.obs(b),.2,1.35),ra=RAD.get(h);
  const rep='<div class="small" style="margin-top:6px">What do you see here?</div><div class="btns">'+[['dry','Dry'],['mostly','Mostly dry'],['damp','Patchy wet'],['wet','Wet']].map(([v,l])=>'<button data-rep="'+v+'" data-lat="'+cc[0]+'" data-lon="'+cc[1]+'">'+l+'</button>').join('')+'</div>';
- L.popup({offset:[0,-4]}).setLatLng(cc).setContent('<b>'+Math.round(PG[o]/2.55)+'% of surface dry</b> in the outlined 50 m square'+(k!==k0?' (nearest open ground to where you tapped)':'')+(ROAD&&ROAD[k]>40?' · on a street':'')+(SG[o]===1?'<br><b>Snow on the surface</b>':SG[o]===2?'<br><b>Ice on the surface</b>':'')+(SG[o]?'':'<br>'+(WG[o]>0?'Wet parts: <b>'+WETL[wetLv(WG[o]/100,2)].lab+'</b> ('+(WG[o]/100).toFixed(2)+' mm)':'No water on the surface'))+'<br>Pavement '+(TG[o]/10).toFixed(1)+' °C<br>Local wind '+u.toFixed(1)+' m/s'
+ L.popup({offset:[0,-4]}).setLatLng(cc).setContent('<b>'+Math.round(PG[o]/2.55)+'% of surface dry</b> in the outlined 50 m square'+(k!==k0?' (nearest open ground to where you tapped)':'')+(ROAD&&ROAD[k]>40?' · on a mapped street or path':'')+(SG[o]===1?'<br><b>Snow on the surface</b>':SG[o]===2?'<br><b>Ice on the surface</b>':'')+(SG[o]?'':'<br>'+(WG[o]>0?'Wet parts: <b>'+WETL[wetLv(WG[o]/100,2)].lab+'</b> ('+(WG[o]/100).toFixed(2)+' mm)':'No water on the surface'))+'<br>Pavement '+(TG[o]/10).toFixed(1)+' °C<br>Local wind '+u.toFixed(1)+' m/s'
   +rainInfo(cc[0],cc[1])+(ra&&h!==nowIdx?'<br>Radar rain in the selected hour: '+(radS(ra,P.rx,P.ry)*gCorr).toFixed(2)+' mm':'')
   +(haveCover?'<br>Buildings '+Math.round(BLD[k]/2.55)+'% (up to '+BH50[k]+' m) · trees '+Math.round(TRE[k]/2.55)+'%<br>Open sky '+SVF[k]+'% · sunlit '+Math.round(SUNSH[k]/2.55)+'% of daylight today':'')+rep).openOn(map)});
 map.on('popupclose',()=>hiLayer.clearLayers());
