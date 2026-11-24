@@ -241,7 +241,7 @@ const leafOff=[10,11,0,1,2,3].includes(new Date().getMonth()),TOPAC=leafOff?.45:
 /* ================= state ================= */
 let OM=null,T=[],nowIdx=0,H0=0,H1=0,DW0=0,FMI={},ST=[],CAMS=[],EV={},EVA={},RES={},src={},SUN=[];
 let COARSE=[],CI=null,haveCover=false,coverInfo={},WAT,BLD,TRE,ROAD,IMP,BH50,OPEN,OBS,HORB,HORT,SVF,SUNSH;
-let STNS=[],RESID=[],HARM=null,DIS=null,omModel='',radK=null,radarClutter=0,RAD=new Map(),RFR=new Map(),radarNum=false,radarLatest=0,gCorr=1,radarMsg='',radarMax=0;
+let STNS=[],RESID=[],HARM=null,DIS=null,omModel='',RBF=null,radK=null,radarClutter=0,RAD=new Map(),RFR=new Map(),radarNum=false,radarLatest=0,gCorr=1,radarMsg='',radarMax=0;
 let PG=null,TG=null,WG=null,SG=null,camShowAll=false,calOff=0,calN=0,contrast=ls.get('dryContrast')||'auto',layerId=ls.get('dryLayer')||'dry',busy=false,moveId=null;
 let pavedOnly=ls.get('dryPaved')==='1';
 try{EV=JSON.parse(ls.get('dryEV')||'{}')}catch(e){EV={}}
@@ -493,7 +493,7 @@ function radS(a,x,y){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,i1=Math
 function motion(a,b){let best=[0,0],be=1e9,cnt=0;for(let i=0;i<a.length;i++)if(a[i]>.1||b[i]>.1)cnt++;if(cnt<15)return[0,0];
  for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){let e=0,n=0;for(let j=4;j<RH-4;j++)for(let i=4;i<RW-4;i++){const v=b[j*RW+i],u=a[(j-dy)*RW+(i-dx)];if(v>.1||u>.1){e+=Math.abs(v-u);n++}}if(n>10&&e/n<be){be=e/n;best=[dx,dy]}}return best}
 function buildRadarHours(){
- RAD=new Map();const BF=new Map();const bf=t=>{if(!BF.has(t)){const f=RFR.get(t);BF.set(t,f?blur(f):null)}return BF.get(t)};const L0=bf(radarLatest),L1=bf(radarLatest-900);const mv=L1?motion(L1,L0):[0,0];
+ RAD=new Map();const BF=new Map();RBF=BF;const bf=t=>{if(!BF.has(t)){const f=RFR.get(t);BF.set(t,f?blur(f):null)}return BF.get(t)};const L0=bf(radarLatest),L1=bf(radarLatest-900);const mv=L1?motion(L1,L0):[0,0];
  const slot=t=>{if(t<=radarLatest)return bf(t);const m=Math.round((t-radarLatest)/900);if(m>8)return null;const o=new Float32Array(RW*RH),f=Math.pow(.92,m);
   for(let j=0;j<RH;j++)for(let i=0;i<RW;i++){const si=Math.round(i-mv[0]*m),sj=Math.round(j-mv[1]*m);if(si<0||sj<0||si>=RW||sj>=RH)continue;o[j*RW+i]=L0[sj*RW+si]*f}return o};
  for(let i=0;i<T.length;i++){const te=T[i];if(te<radarLatest-24*3600||te>radarLatest+2*3600+900)continue;
@@ -925,6 +925,20 @@ $('copyTest').addEventListener('click',async()=>{const t=testRows.map(r=>r.join(
 const hiLayer=L.layerGroup().addTo(map),userLayer=L.layerGroup().addTo(map);
 function drawUser(){userLayer.clearLayers();const now=Date.now();for(const[id,e]of Object.entries(EV))if(id.startsWith('pt-')&&now-e.t<3*3600e3)
  L.marker([e.lat,e.lon],{icon:L.divIcon({className:'',html:'<div style="width:14px;height:14px;transform:rotate(45deg);background:'+CLS[e.cls].c+';border:2px solid #fff;box-shadow:0 0 2px #000"></div>',iconSize:[14,14]})}).addTo(userLayer).bindTooltip('You: '+CLS[e.cls].lab+' ('+Math.round((now-e.t)/6e4)+' min ago)')}
+function rainInfo(lat,lon){
+ const ago=m=>m<60?Math.round(m)+' min ago':m<48*60?(Math.floor(m/60)+' h'+(m%60>=5?' '+Math.round(m%60)+' min':''))+' ago':'over 2 days ago';
+ if(radarNum&&radarLatest&&RBF){const[x,y]=radXY(lat,lon),get=t=>{if(!RBF.has(t)){const f=RFR.get(t);RBF.set(t,f?blur(f):null)}return RBF.get(t)};
+  const f0=get(radarLatest),now=f0?radS(f0,x,y)*gCorr:0,tl=new Date(radarLatest*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Helsinki'});
+  const lvl=now<.1?null:now<1?'light':now<4?'moderate':'heavy';
+  let last=null;for(let t=radarLatest;t>=radarLatest-24*3600;t-=900){const f=get(t);if(f&&radS(f,x,y)*gCorr>=.1){last=t;break}}
+  const sum=h=>{let s2=0;for(let t=radarLatest;t>radarLatest-h*3600;t-=900){const f=get(t);if(f)s2+=radS(f,x,y)*gCorr*.25}return s2.toFixed(1)};
+  const minsSince=last!=null?(Date.now()/1000-last)/60:null;
+  return'<br><b>'+(lvl?'Raining now: '+lvl+' ('+now.toFixed(1)+' mm/h)':'Not raining now')+'</b> <span class="small">radar '+tl+'</span>'
+   +'<br>Last rain: '+(lvl?'now':last!=null?ago(minsSince):'none in the last 24 h')
+   +'<br>Rain past 2 h / 3 h / 5 h: '+sum(2)+' / '+sum(3)+' / '+sum(5)+' mm'}
+ const F=fAt(lat,lon);if(!F)return'';let li=-1;for(let i=nowIdx;i>=Math.max(0,nowIdx-48);i--)if(F.precipitation[i]>.05){li=i;break}
+ const sh=h=>{let s2=0;for(let i=Math.max(0,nowIdx-h+1);i<=nowIdx;i++)s2+=F.precipitation[i];return s2.toFixed(1)};
+ return'<br><span class="small">No radar numbers, from forecast and gauges:</span><br>Last rain: '+(li<0?'none in the last 2 days':li===nowIdx?'this hour':(nowIdx-li)+' h ago')+'<br>Rain past 2 h / 3 h / 5 h: '+sh(2)+' / '+sh(3)+' / '+sh(5)+' mm'}
 function cellBounds(k){const j=Math.floor(k/NX),i=k-j*NX,dy=(BB.n-BB.s)/NY,dx=(BB.e-BB.w)/NX;return[[BB.n-(j+1)*dy,BB.w+i*dx],[BB.n-j*dy,BB.w+(i+1)*dx]]}
 function nearestGround(k){if(!haveCover||!(WAT[k]>140||BLD[k]>200))return k;const j0=Math.floor(k/NX),i0=k-j0*NX;let best=-1,bd=1e9;
  for(let dj=-3;dj<=3;dj++)for(let di=-3;di<=3;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=NX||j>=NY)continue;const q=j*NX+i;if(WAT[q]>140||BLD[q]>200)continue;const d=di*di+dj*dj+(ROAD&&ROAD[q]>40?-.5:0);if(d<bd){bd=d;best=q}}return best}
@@ -942,7 +956,7 @@ map.on('click',e=>{const{lat,lng}=e.latlng;
  const o=(h-DW0)*N+k,F=COARSE[CI[k]],b=bin16(F.wind_direction_10m[h]),P=profOf(k,null,lat,lng),u=F.wind_speed_10m[h]*clamp(.75+.7*P.open(b)-P.obs(b),.2,1.35),ra=RAD.get(h);
  const rep='<div class="small" style="margin-top:6px">What do you see here?</div><div class="btns">'+[['dry','Dry'],['mostly','Mostly dry'],['damp','Patchy wet'],['wet','Wet']].map(([v,l])=>'<button data-rep="'+v+'" data-lat="'+cc[0]+'" data-lon="'+cc[1]+'">'+l+'</button>').join('')+'</div>';
  L.popup({offset:[0,-4]}).setLatLng(cc).setContent('<b>'+Math.round(PG[o]/2.55)+'% of surface dry</b> in the outlined 50 m square'+(k!==k0?' (nearest open ground to where you tapped)':'')+(ROAD&&ROAD[k]>40?' · on a street':'')+(SG[o]===1?'<br><b>Snow on the surface</b>':SG[o]===2?'<br><b>Ice on the surface</b>':'')+(SG[o]?'':'<br>'+(WG[o]>0?'Wet parts: <b>'+WETL[wetLv(WG[o]/100,2)].lab+'</b> ('+(WG[o]/100).toFixed(2)+' mm)':'No water on the surface'))+'<br>Pavement '+(TG[o]/10).toFixed(1)+' °C<br>Local wind '+u.toFixed(1)+' m/s'
-  +(ra?'<br>Radar rain that hour '+(radS(ra,P.rx,P.ry)*gCorr).toFixed(2)+' mm':'')
+  +rainInfo(cc[0],cc[1])+(ra&&h!==nowIdx?'<br>Radar rain in the selected hour: '+(radS(ra,P.rx,P.ry)*gCorr).toFixed(2)+' mm':'')
   +(haveCover?'<br>Buildings '+Math.round(BLD[k]/2.55)+'% (up to '+BH50[k]+' m) · trees '+Math.round(TRE[k]/2.55)+'%<br>Open sky '+SVF[k]+'% · sunlit '+Math.round(SUNSH[k]/2.55)+'% of daylight today':'')+rep).openOn(map)});
 map.on('popupclose',()=>hiLayer.clearLayers());
 {const b=document.createElement('button');b.className='gpsbtn';b.title='Show my location';b.setAttribute('aria-label','Show my location');
