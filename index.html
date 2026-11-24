@@ -262,12 +262,14 @@ const bases={'Grey (street names)':grey,'Streets (detailed)':streets,'Satellite'
 (bases[ls.get('dryBase')]||streets).addTo(map);
 const radarLayer=L.tileLayer.wms(FMIW,{layers:RLAY,format:'image/png',transparent:true,opacity:.7,attribution:'Radar © FMI',zIndex:5});
 const siteLayer=L.layerGroup().addTo(map),stnLayer=L.layerGroup().addTo(map),stnLbl=L.layerGroup(),camLayer=L.layerGroup().addTo(map),windLayer=L.layerGroup();
-L.control.layers(bases,{'Rain radar (FMI)':radarLayer,'Your spots':siteLayer,'Road sensors':stnLayer,'Sensor readings':stnLbl,'Cameras':camLayer,'Wind arrows':windLayer},{collapsed:true}).addTo(map);
+const overlay=L.imageOverlay('data:image/gif;base64,R0lGODlhAQABAAAAACw=',[[BB.s,BB.w],[BB.n,BB.e]],{opacity:.62});if(ls.get('dryHeatOff')!=='1')overlay.addTo(map);
+L.control.layers(bases,{'Heat map (selected layer)':overlay,'Rain radar (FMI)':radarLayer,'Your spots':siteLayer,'Road sensors':stnLayer,'Sensor readings':stnLbl,'Cameras':camLayer,'Wind arrows':windLayer},{collapsed:true}).addTo(map);
 map.on('baselayerchange',e=>ls.set('dryBase',e.name));
 map.on('overlayadd',e=>{if(e.layer===windLayer)drawWind();if(e.layer===stnLbl)drawStations();if(e.layer===radarLayer)radarTime()});
-map.on('overlayremove',e=>{if(e.layer===radarLayer)radSync()});
+map.on('overlayremove',e=>{if(e.layer===radarLayer)radSync();if(e.layer===overlay)ls.set('dryHeatOff','1')});
+map.on('overlayadd',e=>{if(e.layer===overlay)ls.set('dryHeatOff','0')});
 map.on('moveend',()=>{if(map.hasLayer(windLayer))drawWind()});
-const cv=document.createElement('canvas');cv.width=NX;cv.height=NY;let overlay=null;
+const cv=document.createElement('canvas');cv.width=NX;cv.height=NY;
 
 /* ================= weather loaders ================= */
 async function loadOM(){
@@ -654,7 +656,7 @@ function renderMap(){
   const v=cellVal(layerId,k,h);if(Number.isNaN(v)||(layerId==='radar'&&v<.02)){D[o+3]=0;continue}
   const c=layerId==='dry'?RDRY(curMap(v)):L0.r((v-L0.min)/(L0.max-L0.min));D[o]=c[0];D[o+1]=c[1];D[o+2]=c[2];D[o+3]=255}
  ctx.putImageData(im,0,0);const url=cv.toDataURL();
- if(overlay)overlay.setUrl(url);else overlay=L.imageOverlay(url,[[BB.s,BB.w],[BB.n,BB.e]],{opacity:.62}).addTo(map);
+ overlay.setUrl(url);
  siteLayer.clearLayers();
  for(const s of SITES){const r=RES[s.id];if(!r)continue;const p=r.p[h];
   L.circleMarker([s.lat,s.lon],{radius:11,color:'#fff',weight:3,fillColor:rgb(curMap(p)),fillOpacity:1}).addTo(siteLayer)
