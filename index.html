@@ -738,6 +738,7 @@ function renderSites(){
   +'<p class="meta" style="color:var(--ink)">'+(r.cls[h]==='snow'||r.cls[h]==='ice'?'Surface: <b>'+c.lab+'</b>':wetTxt(r.W[h],r.P.wmax))+'</p>'
   +'<p class="meta">Pavement '+r.Ts[h].toFixed(1)+' °C · local wind '+r.u[h].toFixed(1)+' m/s'+cov+rr+(r.S[h]>.05?' · snow '+r.S[h].toFixed(1)+' mm':'')+'</p>'
   +'<p class="meta" style="margin-top:0">'+esc(whyText(s,r))+'</p>'
+  +'<div class="meta" style="margin:0 0 8px">'+rainInfo(s.lat,s.lon).replace(/^<br>/,'')+'</div>'
   +'<p style="margin:0;font-weight:600">'+nextDry(r)+'</p>'
   +strip({p:r.p,W:r.W,wmax:r.P.wmax})
   +(s.custom?'<label class="chk" style="gap:10px">Surface <select data-surf="'+s.id+'" style="min-height:40px">'+Object.entries(SURF).map(([k,v])=>'<option value="'+k+'"'+((s.surf||'asphalt')===k?' selected':'')+'>'+v.lab+'</option>').join('')+'</select></label>':'')
