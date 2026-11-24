@@ -925,20 +925,23 @@ $('copyTest').addEventListener('click',async()=>{const t=testRows.map(r=>r.join(
 const hiLayer=L.layerGroup().addTo(map),userLayer=L.layerGroup().addTo(map);
 function drawUser(){userLayer.clearLayers();const now=Date.now();for(const[id,e]of Object.entries(EV))if(id.startsWith('pt-')&&now-e.t<3*3600e3)
  L.marker([e.lat,e.lon],{icon:L.divIcon({className:'',html:'<div style="width:14px;height:14px;transform:rotate(45deg);background:'+CLS[e.cls].c+';border:2px solid #fff;box-shadow:0 0 2px #000"></div>',iconSize:[14,14]})}).addTo(userLayer).bindTooltip('You: '+CLS[e.cls].lab+' ('+Math.round((now-e.t)/6e4)+' min ago)')}
+function rainHist(vals,src){const mx=Math.max(.5,...vals),cr=ramp([[0,'#8ec5ea'],[.5,'#2f6fde'],[1,'#5b1d9e']]);
+ return'<div style="margin:6px 0 2px;font-size:12px"><div style="display:flex;align-items:flex-end;gap:4px;height:46px;border-bottom:1px solid #999">'
+  +vals.map(v=>'<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%"><span style="font-size:11px;line-height:1.1">'+(v>=.05?v.toFixed(1):'0')+'</span><div style="width:100%;height:'+Math.max(v>=.05?3:0,v/mx*34)+'px;border-radius:2px 2px 0 0;background:rgb('+cr(Math.min(1,v/4)).map(Math.round).join(',')+')"></div></div>').join('')
+  +'</div><div style="display:flex;gap:4px;color:#666">'+['5 h','4 h','3 h','2 h','1 h'].map(l=>'<span style="flex:1;text-align:center">'+l+'</span>').join('')+'</div><div style="color:#666">Rain (mm) in each of the past 5 hours, latest on the right'+(src?' · '+src:'')+'</div></div>'}
 function rainInfo(lat,lon){
  const ago=m=>m<60?Math.round(m)+' min ago':m<48*60?(Math.floor(m/60)+' h'+(m%60>=5?' '+Math.round(m%60)+' min':''))+' ago':'over 2 days ago';
  if(radarNum&&radarLatest&&RBF){const[x,y]=radXY(lat,lon),get=t=>{if(!RBF.has(t)){const f=RFR.get(t);RBF.set(t,f?blur(f):null)}return RBF.get(t)};
   const f0=get(radarLatest),now=f0?radS(f0,x,y)*gCorr:0,tl=new Date(radarLatest*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Helsinki'});
   const lvl=now<.1?null:now<1?'light':now<4?'moderate':'heavy';
   let last=null;for(let t=radarLatest;t>=radarLatest-24*3600;t-=900){const f=get(t);if(f&&radS(f,x,y)*gCorr>=.1){last=t;break}}
-  const sum=h=>{let s2=0;for(let t=radarLatest;t>radarLatest-h*3600;t-=900){const f=get(t);if(f)s2+=radS(f,x,y)*gCorr*.25}return s2.toFixed(1)};
+  const hr=k=>{let s2=0;for(let t=radarLatest-(k-1)*3600;t>radarLatest-k*3600;t-=900){const f=get(t);if(f)s2+=radS(f,x,y)*gCorr*.25}return s2};
   const minsSince=last!=null?(Date.now()/1000-last)/60:null;
   return'<br><b>'+(lvl?'Raining now: '+lvl+' ('+now.toFixed(1)+' mm/h)':'Not raining now')+'</b> <span class="small">radar '+tl+'</span>'
    +'<br>Last rain: '+(lvl?'now':last!=null?ago(minsSince):'none in the last 24 h')
-   +'<br>Rain past 2 h / 3 h / 5 h: '+sum(2)+' / '+sum(3)+' / '+sum(5)+' mm'}
+   +rainHist([5,4,3,2,1].map(hr),'radar')}
  const F=fAt(lat,lon);if(!F)return'';let li=-1;for(let i=nowIdx;i>=Math.max(0,nowIdx-48);i--)if(F.precipitation[i]>.05){li=i;break}
- const sh=h=>{let s2=0;for(let i=Math.max(0,nowIdx-h+1);i<=nowIdx;i++)s2+=F.precipitation[i];return s2.toFixed(1)};
- return'<br><span class="small">No radar numbers, from forecast and gauges:</span><br>Last rain: '+(li<0?'none in the last 2 days':li===nowIdx?'this hour':(nowIdx-li)+' h ago')+'<br>Rain past 2 h / 3 h / 5 h: '+sh(2)+' / '+sh(3)+' / '+sh(5)+' mm'}
+ return'<br><span class="small">No radar numbers, from forecast and gauges:</span><br>Last rain: '+(li<0?'none in the last 2 days':li===nowIdx?'this hour':(nowIdx-li)+' h ago')+rainHist([4,3,2,1,0].map(d=>Math.max(0,F.precipitation[nowIdx-d]||0)),'forecast and gauges')}
 function cellBounds(k){const j=Math.floor(k/NX),i=k-j*NX,dy=(BB.n-BB.s)/NY,dx=(BB.e-BB.w)/NX;return[[BB.n-(j+1)*dy,BB.w+i*dx],[BB.n-j*dy,BB.w+(i+1)*dx]]}
 function nearestGround(k){if(!haveCover||!(WAT[k]>140||BLD[k]>200))return k;const j0=Math.floor(k/NX),i0=k-j0*NX;let best=-1,bd=1e9;
  for(let dj=-3;dj<=3;dj++)for(let di=-3;di<=3;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=NX||j>=NY)continue;const q=j*NX+i;if(WAT[q]>140||BLD[q]>200)continue;const d=di*di+dj*dj+(ROAD&&ROAD[q]>40?-.5:0);if(d<bd){bd=d;best=q}}return best}
