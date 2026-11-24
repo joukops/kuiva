@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dry Asphalt Helsinki</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: practical, outdoorsy, a skater's weather instrument
+   IDEA: a road-weather service board: surface state per spot, like Fintraffic's
+   PICTURE: the city map washed in a wet-blue to dry-ochre surface heat map, street-level
+   COLOUR and TYPE: asphalt charcoal, wet blue, dry ochre; Barlow Condensed numerals (road-sign feel)
+   LAYOUT: map first, time slider and layer picker, spot cards, then evidence (radar, stations, cameras) */
+:root{color-scheme:light dark;--bg:light-dark(#f4f3f0,#15181b);--card:light-dark(#fff,#1e2226);--ink:light-dark(#1b1f23,#e9ebee);--mute:light-dark(#5d656d,#9aa3ab);--line:light-dark(#dcdad4,#2e343a);--dry:#e39a2b;--asph:#23282d}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overflow-x:clip}
+header{background:var(--asph);color:#f1f1ee;padding:16px max(4vw,14px) 12px}
+h1{font:700 clamp(30px,6vw,46px)/1.05 "Barlow Condensed",sans-serif;margin:0;text-wrap:balance}
+h2{font:700 26px/1.1 "Barlow Condensed",sans-serif;margin:0 0 10px}
+.sub{color:#b9c0c6;margin:4px 0 0}
+#headline{margin-top:8px;font-size:17px}#headline b{color:var(--dry)}
+.band{padding:18px max(4vw,14px)}
+#map{height:min(66vh,640px);min-height:360px;background:#888}
+.ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px max(4vw,14px);background:var(--card);border-bottom:1px solid var(--line)}
+.ctl input[type=range]{flex:1 1 240px;height:44px;accent-color:var(--dry)}
+#when{font:700 22px "Barlow Condensed",sans-serif;white-space:nowrap;min-width:9ch}
+.legend{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute);white-space:nowrap}
+.legend i{display:block;width:120px;height:10px;border-radius:5px}
+button,select{font:600 15px Barlow,sans-serif;min-height:44px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--dry);outline-offset:2px}
+button.on{background:var(--ink);color:var(--bg)}
+#prog{font-size:14px;color:var(--mute);padding:0 max(4vw,14px);min-height:22px}
+#prog.move{color:#fff;background:#c9821f;font-weight:600;padding-block:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.site .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+h2{overflow-wrap:anywhere}.pct{flex:none;font:700 44px/1 "Barlow Condensed",sans-serif;white-space:nowrap}
+.state{display:inline-block;font-weight:600;font-size:14px;padding:2px 9px;border-radius:99px;color:#fff;margin-top:4px}
+.meta{font-size:14px;color:var(--mute);margin:6px 0}
+.strip{display:flex;align-items:flex-end;height:46px;gap:1px;margin-top:8px;position:relative}
+.strip span{flex:1;border-radius:1px}.strip .now{position:absolute;top:-4px;bottom:0;width:2px;background:var(--ink)}
+.axis{display:flex;justify-content:space-between;font-size:13px;color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}td.n{text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;padding:3px 9px;border-radius:99px;border:1px solid var(--line)}
+.chip.ok{border-color:#3a9b5c;color:#3a9b5c}.chip.bad{border-color:#c94b3b;color:#c94b3b}.chip.wait{color:var(--mute)}
+.ok{color:#3a9b5c}.bad{color:#c94b3b}
+.cond{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.cond div{font-size:13px;color:var(--mute)}.cond div b{display:block;font:700 26px "Barlow Condensed",sans-serif;color:var(--ink)}
+.cam img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:#333;display:block}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.btns button{flex:1 1 auto;padding:0 8px}
+.small{font-size:13px;color:var(--mute)}
+input[type=text],input[type=password]{font:16px Barlow,sans-serif;width:100%;min-height:44px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+label.chk{display:flex;align-items:center;gap:8px;min-height:44px}label.chk input{width:22px;height:22px}
+details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
+.lbl{background:none;border:0;box-shadow:none;font:700 14px "Barlow Condensed",sans-serif;color:#111;text-shadow:0 0 3px #fff,0 0 3px #fff}
+.lbl::before{display:none}
+.stn{width:12px;height:12px;border:2px solid #fff;border-radius:2px;box-shadow:0 0 2px #000}
+.stl{font:600 12px Barlow,sans-serif;background:rgba(255,255,255,.88);color:#111;border-radius:4px;padding:1px 4px;white-space:nowrap;transform:translate(10px,-8px);display:inline-block}
+.camic{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 2px #000}
+.wa{display:flex;flex-direction:column;align-items:center;font:700 11px Barlow,sans-serif;color:#111;text-shadow:0 0 2px #fff,0 0 2px #fff}
+.leaflet-image-layer{image-rendering:auto!important}
+#testOut td{font-size:14px}
+@media(max-width:600px){.pct{font-size:38px}#map{height:58vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Dry asphalt, Helsinki</h1>
+  <p class="sub">How much of the pavement surface is dry, at street level, using FMI's RoadSurf road weather physics. Built from rain radar, road-weather sensors, road cameras, weather observations and forecasts, and the height of the buildings and trees around each spot.</p>
+  <div id="headline">Loading live data…</div>
+</header>
+<div id="map"></div>
+<div class="ctl">
+  <span id="when">Now</span>
+  <input id="slider" type="range" min="-24" max="36" step="1" value="0" aria-label="Hour offset from now">
+  <button id="nowBtn">Now</button>
+  <select id="layer" aria-label="Map layer">
+    <option value="dry">Share of surface dry</option>
+    <option value="liveradar">Live rain radar only (FMI)</option>
+    <option value="radar">Rain in that hour (radar)</option>
+    <option value="pt">Pavement temperature</option>
+    <option value="air">Air temperature</option>
+    <option value="dew">Pavement minus dew point</option>
+    <option value="film">How wet (damp → standing water)</option>
+    <option value="wind">Local wind speed</option>
+    <option value="sun">Sunlit share of the day</option>
+    <option value="rain">Rain, next 3 h (forecast)</option>
+    <option value="cover">Buildings, trees, water</option>
+    <option value="none">No overlay</option>
+  </select>
+  <label class="chk"><input type="checkbox" id="paved"> Paved only</label>
+  <button id="contrast" title="Stretch colours to show small differences">Contrast: auto</button>
+  <span class="legend"><span id="lgLo"></span><i id="lgBar"></i><span id="lgHi"></span></span>
+  <button id="refresh">Refresh</button>
+</div>
+<div class="ctl" id="radRow" style="display:none">
+  <span id="radT" style="font-weight:600;white-space:nowrap">Radar</span>
+  <button id="radPlay">▶ Play last 2 h</button>
+  <a href="https://en.ilmatieteenlaitos.fi/rainmap" target="_blank" rel="noopener">FMI rain map ↗</a>
+  <a href="https://en.ilmatieteenlaitos.fi/rain-and-cloudiness" target="_blank" rel="noopener">FMI rain + 1 h forecast ↗</a>
+  <span class="small">Radar colours: blue light, yellow–red heavy</span>
+</div>
+<div id="prog"></div>
+
+<section class="band"><h2>Your spots</h2><div id="sites" class="grid"></div>
+  <p class="btns" style="max-width:620px"><button id="addSpot">+ Add a spot</button><button id="resetPos">Restore the original spots</button><button id="backup">Back up my spots</button><button id="restoreBtn">Restore from backup</button></p>
+  <div id="bkBox" style="display:none;max-width:620px"><p class="small" id="bkMsg"></p><textarea id="bkTxt" rows="5" style="width:100%;font:13px monospace;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px"></textarea>
+  <p class="btns"><button id="bkLoad" style="display:none">Load this backup</button></p></div></section>
+
+<section class="band"><h2>Conditions</h2><div id="cond" class="cond"></div>
+  <div class="chips" id="src" style="margin-top:12px"></div></section>
+
+<section class="band"><h2>Your reports vs the model</h2>
+  <p class="small">Every Dry / Mostly dry / Patchy wet / Wet report you make on the map or on a camera is saved with what the model predicted at that place just before. Copy the log and send it to Claude to tune the model.</p>
+  <div class="card" style="max-width:640px;margin:6px 0 14px"><b>Report at exact coordinates</b>
+   <p class="small" style="margin:4px 0">Paste coordinates (60.18286, 24.97064 or 60°10'58.3"N 24°58'14.3"E) or a full Google Maps link, or use your location.</p>
+   <input id="gpsIn" type="text" placeholder="Coordinates or Google Maps link" autocomplete="off">
+   <p class="btns"><button id="gpsMe">Use my location</button><button id="gpsShow">Show on map</button></p>
+   <input id="gpsNote" type="text" placeholder="Note (optional): surface, puddles, grit…" maxlength="120">
+   <div class="btns"><button data-gps="dry">Dry</button><button data-gps="mostly">Mostly dry</button><button data-gps="damp">Patchy wet</button><button data-gps="wet">Wet</button></div>
+   <p class="small" id="gpsMsg" style="margin:6px 0 0"></p></div>
+  <div id="logSum" class="cond"></div>
+  <div class="scroll" style="margin-top:10px"><table class="stack"><thead><tr><th>When</th><th>Where</th><th>You</th><th>Model</th><th class="n">Model dry</th></tr></thead><tbody id="logRows"></tbody></table></div>
+  <p class="btns" style="max-width:520px"><button id="logCopy">Copy report log</button><button id="logClear">Clear log</button></p>
+  <pre id="logTxt" style="display:none;white-space:pre-wrap;user-select:all;-webkit-user-select:all;font-size:12px;max-height:200px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px"></pre>
+</section>
+
+<section class="band"><h2>Test data sources</h2>
+  <p class="small">Checks each data service from this browser: whether it answers, and whether the page may read its numbers. Press it once and send the results if something looks off.</p>
+  <p><button id="testBtn">Run test</button> <button id="copyTest">Copy results</button></p>
+  <div class="scroll"><table id="testOut"><tbody></tbody></table></div>
+  <pre id="testTxt" style="display:none;white-space:pre-wrap;user-select:all;-webkit-user-select:all;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px"></pre>
+</section>
+
+<section class="band"><h2>Road weather stations (Fintraffic)</h2>
+  <div class="scroll"><table><thead><tr><th>Station</th><th>Surface</th><th class="n">Road °C</th><th class="n">Air °C</th><th class="n">km</th></tr></thead><tbody id="stn"></tbody></table></div>
+</section>
+
+<section class="band"><h2>Road cameras</h2>
+  <p class="small" id="camInfo">Each image is analysed automatically: how dark the road is compared with the rest of the scene, mirror-like glare, and vertical light streaks (reflections that only form on wet asphalt). Snow is spotted as bright, colourless areas. The analysis is calibrated against cameras that stand next to a road sensor. Your own Dry, Damp, Wet or Snow tap overrides it.</p>
+  <label class="chk"><input type="checkbox" id="autoClaude"> Also have Claude assess every shown camera at each refresh (needs API key below)</label>
+  <div id="cams" class="grid"></div>
+  <p><button id="moreCams">Show all cameras</button></p>
+  <h2 style="margin-top:18px">Shore video webcams</h2>
+  <p class="small">Live streams that can't be analysed automatically. Open one, then mark what you see. Your reading applies around the place the camera looks at.</p>
+  <div id="ext" class="grid"></div>
+</section>
+
+<section class="band">
+  <details><summary>Claude camera analysis (optional)</summary>
+    <p class="small">Paste an Anthropic API key to let Claude look at the camera images. The key is stored only in this browser, and calls go straight from here to api.anthropic.com.</p>
+    <input id="key" type="password" placeholder="sk-ant-…" autocomplete="off">
+    <p class="small">Model</p><input id="model" type="text" value="claude-haiku-5-5">
+    <p><button id="saveKey">Save</button> <button id="askAll">Assess shown cameras now</button></p>
+  </details>
+  <details><summary>How the model works</summary>
+    <p class="small"><b>What counts most.</b> Observations come first, and the forecast only fills gaps and looks ahead. The current surface state comes from Fintraffic road sensors and cameras, which hold the map firmly within a few kilometres of each one. What fell over the last day comes from FMI's rain radar, read every 15 minutes for each 200 m patch and corrected against the Kumpula rain gauge. Radar rain areas are moved forward along their recent track for the next two hours. After that the forecast model takes over.</p>
+    <p class="small"><b>Drying: FMI RoadSurf physics.</b> Each 50 m cell runs a version of the Finnish Meteorological Institute's open-source RoadSurf road weather model (Karsisto 2024), in 20-minute steps from two days back to a day and a half ahead. It balances sunshine, sky and ground heat radiation, heat exchange with the air (driven by wind speed, with RoadSurf's stability corrections) and evaporation against heat conducted through eight road layers. That gives the pavement temperature, including the warmth stored in the asphalt. Water follows RoadSurf's rules: up to 1 mm held in the asphalt's pores plus 1 mm on top, evaporation only when the pavement is at least 0.25 °C and free of snow and ice, instant freezing below 0 °C, gradual melting, rain/sleet/snow split by temperature and humidity, and traffic wearing water, snow and ice off streets (not off plazas and paths). The road layer properties and the conversion from water amount to "share of surface dry" (about 80% dry at 0.08 mm, 50% at 0.25 mm) are my own estimates, because RoadSurf doesn't publish them. Your Dry / Mostly dry / Patchy / Wet reports on the map correct it locally.</p>
+    <p class="small"><b>Buildings and trees.</b> Building outlines and tree cover in four height classes come from HSY's land cover data. Storey counts come from the City of Helsinki building register (storeys × 3.3 m). Where those can't be loaded, OpenStreetMap is used instead. For each cell and each of 16 directions, the app finds how high the skyline rises. The sun then shines on the cell only when it's above that skyline. Bare trees let more light through in winter than in leaf. The same skyline gives the share of open sky, which sets how much the pavement cools at night. RoadSurf itself has no wind direction or neighbourhood, so the app adds street-canyon physics in the style of the Town Energy Balance (TEB) urban model: the part of the sky hidden by buildings is replaced by walls that radiate heat (slightly warmer than the air in the heating season), sunlit facades reflect light down onto the street, wind at street level is slowed by the canyon's height-to-width ratio, canyon air is a little warmer than above the roofs, and streets get a small amount of traffic heat. In addition, upwind buildings and trees shelter a cell for about ten times their height, and open water upwind speeds the wind up. Shading uses RoadSurf's own method: direct sun is switched off when the skyline in the sun's direction is higher than the sun, and diffuse light and night-time cooling are scaled by the share of open sky.</p>
+    <p class="small">These are physics-based estimates that haven't been checked against measurements; use them to compare places and times. The app can't see winter grit (sepeli) or local puddles.</p>
+  </details>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+{
+/* ================= config ================= */
+const SITES=[
+ {id:'hana',name:'Tempelhof (Hanasaari event field)',lat:60.18286,lon:24.97064,sea:[60,220],shelter:.9,shade:.9,wmax:1.5,alb:.07,maint:true,kind:'plaza'},
+ {id:'sompa',name:'Sompasaarenlaituri (cycle path)',lat:60.1805681,lon:24.9733105,sea:[180,330],shelter:.95,shade:.95,wmax:1.5,maint:true,kind:'plaza'},
+ {id:'kork2',name:'Korkeasaari plaza (light stone)',lat:60.1770241,lon:24.9823539,sea:[150,300],shelter:.8,shade:.85,wmax:1.2,alb:.3,maint:true,kind:'plaza'},
+ {id:'hanl',name:'Hanasaarenlaituri',lat:60.179704,lon:24.9667747,sea:[150,300],shelter:.85,shade:.85,maint:true,kind:'plaza'},
+ {id:'merl',name:'Merihaanlaituri (cycle path)',lat:60.1783538,lon:24.9619812,sea:[90,240],shelter:.85,shade:.85,wmax:1.5,maint:true,kind:'plaza'},
+ {id:'kt2',name:'Kansalaistori (stone)',lat:60.1733121,lon:24.9371212,sea:null,shelter:.55,shade:.75,wmax:1.2,alb:.2,maint:true,kind:'plaza'}];
+const DEFSPOTS=SITES.map(s=>({...s}));const DEFPOS=Object.fromEntries(SITES.map(s=>[s.id,[s.lat,s.lon]]));
+const KINDS={plaza:{lab:'Plaza or path (no cars)',tf:0,maint:true,wmax:2},street:{lab:'Street with traffic',tf:1,maint:true,wmax:2},field:{lab:'Open field, not cleared of snow',tf:0,maint:false,wmax:2}};
+let AVGEX=['kt2'];try{const v=localStorage.getItem('dryAvgEx');if(v)AVGEX=JSON.parse(v)}catch(e){}
+let HIDDEN=[];try{HIDDEN=JSON.parse(localStorage.getItem('dryHidden')||'[]')}catch(e){}
+try{for(const c of JSON.parse(localStorage.getItem('drySpots')||'[]'))SITES.push({...c,custom:true,maint:KINDS[c.kind]?.maint??true,tf:KINDS[c.kind]?.tf??0,wmax:2,sea:null,shelter:.8,shade:.8})}catch(e){}
+for(let i=SITES.length-1;i>=0;i--)if(HIDDEN.includes(SITES[i].id))SITES.splice(i,1);
+const EXT=[
+ {id:'x-hana',name:'Hanasaari power plant, toward Kalasatama and Redi',url:'https://www.webcamtaxi.com/en/finland/uusimaa/helsinki-kalasatama-hanasaari-power-plant.html',lat:60.1862,lon:24.9790},
+ {id:'x-south',name:'Market Square and South Harbour',url:'https://www.skylinewebcams.com/webcam/finland/uusimaa/helsinki/port.html',lat:60.1672,lon:24.9536},
+ {id:'x-west',name:'West Harbour, Jätkäsaari',url:'https://www.webcamtaxi.com/en/finland/uusimaa/westharbour-southcam.html',lat:60.1530,lon:24.9185}];
+const BB={s:60.140,n:60.215,w:24.86,e:25.06},CELL=50,R=Math.PI/180;
+const LATM=111320,LONM=111320*Math.cos(60.18*R);
+const NX=Math.round((BB.e-BB.w)*LONM/CELL),NY=Math.round((BB.n-BB.s)*LATM/CELL),N=NX*NY,RF=2,RX=NX*RF,RY=NY*RF,RPX=CELL/RF;
+const RW=Math.round(NX/4),RH=Math.round(NY/4);
+const CX=30,CY=20,CEN=[60.177,24.95],HB={s:60.12,n:60.30,w:24.78,e:25.27},KUMPULA=[60.2039,24.9614];
+const lonOf=i=>BB.w+(i+.5)/NX*(BB.e-BB.w),latOf=j=>BB.n-(j+.5)/NY*(BB.n-BB.s);
+const cellOf=(lat,lon)=>{const i=Math.floor((lon-BB.w)/(BB.e-BB.w)*NX),j=Math.floor((BB.n-lat)/(BB.n-BB.s)*NY);return(i<0||j<0||i>=NX||j>=NY)?-1:j*NX+i};
+const radOf=(lat,lon)=>{const i=clamp(Math.floor((lon-BB.w)/(BB.e-BB.w)*RW),0,RW-1),j=clamp(Math.floor((BB.n-lat)/(BB.n-BB.s)*RH),0,RH-1);return j*RW+i};
+const OMPTS=SITES.map(s=>[s.lat,s.lon]).concat([[60.142,24.87],[60.213,24.87],[60.142,25.05],[60.213,25.05],[60.195,24.93],[60.155,24.95],[60.20,24.99]]);
+const HV=['temperature_2m','dew_point_2m','relative_humidity_2m','precipitation','snowfall','snow_depth','precipitation_probability','cloud_cover','wind_speed_10m','wind_direction_10m','shortwave_radiation','direct_radiation','diffuse_radiation'];
+const NH=61,DD=[40,80,130,200,300,450,650],DS=[12,25,40,55,75,100,130,170,220,280];
+const HSYW='https://kartta.hsy.fi/geoserver/wms',HELW='https://kartta.hel.fi/ws/geoserver/avoindata/wfs',FMIW='https://openwms.fmi.fi/geoserver/Radar/wms',RLAY='radar_finland_cappi_rate';
+const hsyL=y=>({tree:['2_10m','10_15m','15_20m','yli20m'].map(c=>'asuminen_ja_maankaytto:maanpeite_puusto_'+c+'_'+y),bld:'asuminen_ja_maankaytto:maanpeite_rakennus_'+y,
+ water:['asuminen_ja_maankaytto:maanpeite_vesi_'+y,'asuminen_ja_maankaytto:maanpeite_merialue_'+y],road:'asuminen_ja_maankaytto:maanpeite_paallystetty_tie_'+y,imp:'asuminen_ja_maankaytto:maanpeite_muu_vetta_lapaisematon_pinta_'+y});
+const TREEH=[6,12.5,17.5,23];
+
+/* ================= helpers ================= */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const km=(a,b,c,d)=>{const x=(d-b)*R*Math.cos((a+c)/2*R),y=(c-a)*R;return 6371*Math.hypot(x,y)};
+const esat=T=>6.112*Math.exp(17.62*T/(243.12+T));
+const sig=x=>1/(1+Math.exp(-x));
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const inSec=(d,[a,b])=>a<=b?(d>=a&&d<=b):(d>=a||d<=b);
+const bin16=d=>((Math.round(d/22.5)%16)+16)%16;
+const fmtT=t=>new Date(t*1000).toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Helsinki'});
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function getJSON(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+const why=e=>e instanceof TypeError?'blocked or unreachable':(e.message||'failed');
+const magnusTd=(t,rh)=>{const g=Math.log(Math.max(1,rh)/100)+17.62*t/(243.12+t);return 243.12*g/(17.62-g)};
+const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function ramp(stops){const s=stops.map(([p,c])=>[p,hex(c)]);
+ const f=v=>{v=v<0?0:v>1?1:v;for(let i=1;i<s.length;i++)if(v<=s[i][0]){const a=s[i-1],b=s[i],t=(v-a[0])/(b[0]-a[0]||1);return[a[1][0]+(b[1][0]-a[1][0])*t,a[1][1]+(b[1][1]-a[1][1])*t,a[1][2]+(b[1][2]-a[1][2])*t]}return s[s.length-1][1]};
+ f.css='linear-gradient(90deg,'+stops.map(([p,c])=>c+' '+(p*100)+'%').join(',')+')';return f}
+const RDRY=ramp([[0,'#1d4fc4'],[.35,'#4ea3dc'],[.5,'#c9d3cf'],[.7,'#f0c75e'],[1,'#e07b22']]);
+const rgb=p=>'rgb('+RDRY(p).map(Math.round).join(',')+')';
+function sunPos(t,lat,lon){const d=t/86400-10957.5,g=(357.529+.98560028*d)*R,q=280.459+.98564736*d,L=(q+1.915*Math.sin(g)+.02*Math.sin(2*g))*R,e=(23.439-3.6e-7*d)*R;
+ const ra=Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)),dec=Math.asin(Math.sin(e)*Math.sin(L)),gm=((18.697374558+24.06570982441908*d)%24+24)%24,H=(gm*15+lon)*R-ra,la=lat*R;
+ const el=Math.asin(Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(H)),az=Math.atan2(-Math.sin(H),Math.tan(dec)*Math.cos(la)-Math.sin(la)*Math.cos(H));
+ return{el:el/R,az:(az/R+360)%360}}
+const b64e=u=>{let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)};
+const b64d=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
+const CLS={dry:{W:0,S:0,lab:'Dry',c:'#c9821f'},mostly:{W:.08,S:0,lab:'Mostly dry',c:'#c6a24a'},damp:{W:.2,S:0,lab:'Damp / patchy',c:'#3f93c9'},wet:{W:.8,S:0,lab:'Wet',c:'#2f5fcc'},snow:{W:0,S:1.5,lab:'Snow',c:'#7a8794'},ice:{W:0,S:0,I:.5,lab:'Ice risk',c:'#6b4fb8'}};
+const leafOff=[10,11,0,1,2,3].includes(new Date().getMonth()),TOPAC=leafOff?.45:.85;
+
+/* ================= state ================= */
+let OM=null,T=[],nowIdx=0,H0=0,H1=0,DW0=0,FMI={},ST=[],CAMS=[],EV={},EVA={},RES={},src={},SUN=[];
+let COARSE=[],CI=null,haveCover=false,coverInfo={},WAT,BLD,TRE,ROAD,IMP,BH50,OPEN,OBS,HORB,HORT,SVF,SUNSH;
+let STNS=[],RESID=[],HARM=null,DIS=null,omModel='',radK=null,radarClutter=0,RAD=new Map(),RFR=new Map(),radarNum=false,radarLatest=0,gCorr=1,radarMsg='',radarMax=0;
+let PG=null,TG=null,WG=null,SG=null,camShowAll=false,calOff=0,calN=0,contrast=ls.get('dryContrast')||'auto',layerId=ls.get('dryLayer')||'dry',busy=false,moveId=null;
+let pavedOnly=ls.get('dryPaved')==='1';
+try{EV=JSON.parse(ls.get('dryEV')||'{}')}catch(e){EV={}}
+try{const P=JSON.parse(ls.get('dryPos4')||'{}');for(const s of SITES)if(P[s.id]){s.lat=P[s.id][0];s.lon=P[s.id][1]}}catch(e){}
+const prog=t=>{if(!moveId)$('prog').textContent=t||''};
+
+/* ================= map ================= */
+const map=L.map('map',{zoomControl:true,maxZoom:19,minZoom:11}).setView([60.1812,24.9718],15);
+const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
+const eAttr='Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors';
+const grey=L.layerGroup([L.tileLayer(ESRI+'Canvas/World_'+(dark?'Dark':'Light')+'_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:16,attribution:eAttr}),
+ L.tileLayer(ESRI+'Canvas/World_'+(dark?'Dark':'Light')+'_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:16,pane:'shadowPane'})]);
+const streets=L.tileLayer(ESRI+'World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:19,attribution:eAttr});
+const sat=L.tileLayer(ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'});
+const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,referrerPolicy:'strict-origin-when-cross-origin',attribution:'© OpenStreetMap contributors'});
+const bases={'Grey (street names)':grey,'Streets (detailed)':streets,'Satellite':sat,'OpenStreetMap':osm};
+(bases[ls.get('dryBase')]||streets).addTo(map);
+const radarLayer=L.tileLayer.wms(FMIW,{layers:RLAY,format:'image/png',transparent:true,opacity:.7,attribution:'Radar © FMI',zIndex:5});
+const siteLayer=L.layerGroup().addTo(map),stnLayer=L.layerGroup().addTo(map),stnLbl=L.layerGroup(),camLayer=L.layerGroup().addTo(map),windLayer=L.layerGroup();
+L.control.layers(bases,{'Rain radar (FMI)':radarLayer,'Your spots':siteLayer,'Road sensors':stnLayer,'Sensor readings':stnLbl,'Cameras':camLayer,'Wind arrows':windLayer},{collapsed:true}).addTo(map);
+map.on('baselayerchange',e=>ls.set('dryBase',e.name));
+map.on('overlayadd',e=>{if(e.layer===windLayer)drawWind();if(e.layer===stnLbl)drawStations();if(e.layer===radarLayer)radarTime()});
+map.on('overlayremove',e=>{if(e.layer===radarLayer)radSync()});
+map.on('moveend',()=>{if(map.hasLayer(windLayer))drawWind()});
+const cv=document.createElement('canvas');cv.width=NX;cv.height=NY;let overlay=null;
+
+/* ================= weather loaders ================= */
+async function loadOM(){
+ const u='https://api.open-meteo.com/v1/forecast?latitude='+OMPTS.map(p=>p[0]).join(',')+'&longitude='+OMPTS.map(p=>p[1]).join(',')+'&hourly='+HV.join(',')+'&past_days=2&forecast_days=3&timeformat=unixtime&wind_speed_unit=ms&timezone=GMT';
+ let d;try{d=await getJSON(u+'&models=metno_seamless');omModel='MET Nordic'}catch(e){d=await getJSON(u);omModel='best match'}
+ if(!Array.isArray(d))d=[d];OM=d.map(x=>x.hourly);T=OM[0].time;
+ for(const h of OM){for(const v of HV)if(!h[v])h[v]=[];for(let i=0;i<T.length;i++){const sw=h.shortwave_radiation[i]??0;
+  if(h.direct_radiation[i]==null||h.diffuse_radiation[i]==null){const c=(h.cloud_cover[i]??70)/100,df=.25+.75*c;h.diffuse_radiation[i]=sw*df;h.direct_radiation[i]=sw*(1-df)}}}}
+async function loadMetNo(){
+ const d=await getJSON('https://api.met.no/weatherapi/locationforecast/2.0/complete?lat='+CEN[0]+'&lon='+CEN[1]);
+ const fut=new Map();for(const s of d.properties.timeseries){const t=Date.parse(s.time)/1000,x=s.data.instant.details,n=s.data.next_1_hours?.details;if(!n)continue;
+  fut.set(t,{T:x.air_temperature,Td:x.dew_point_temperature??magnusTd(x.air_temperature,x.relative_humidity),rh:x.relative_humidity,ws:x.wind_speed,wd:x.wind_from_direction,cc:x.cloud_area_fraction,P:n.precipitation_amount||0,pp:n.probability_of_precipitation??(n.precipitation_amount>0?70:10)})}
+ const h0=Math.floor(Date.now()/3600e3)*3600,first=[...fut.keys()][0];if(first==null)throw new Error('empty');
+ const H={time:[]};HV.forEach(v=>H[v]=[]);let last=fut.get(first);
+ for(let t=h0-48*3600;t<h0+48*3600;t+=3600){let r=fut.get(t);const o=FMI[t];
+  if(!r&&o&&isFinite(o.t2m))r={T:o.t2m,Td:magnusTd(o.t2m,o.rh??90),rh:o.rh??90,ws:isFinite(o.ws_10min)?o.ws_10min:4,wd:isFinite(o.wd_10min)?o.wd_10min:200,cc:80,P:Math.max(0,o.r_1h||0),pp:0};
+  if(!r)r={...last,P:t<first?0:last.P};last=r;
+  H.time.push(t);H.temperature_2m.push(r.T);H.dew_point_2m.push(r.Td);H.relative_humidity_2m.push(r.rh);H.precipitation.push(r.P);
+  H.snowfall.push(r.T<.5?r.P/.7:0);H.snow_depth.push(o&&o.snow_aws>0?o.snow_aws/100:0);H.precipitation_probability.push(r.pp);H.cloud_cover.push(r.cc);
+  H.wind_speed_10m.push(r.ws);H.wind_direction_10m.push(r.wd);H.shortwave_radiation.push(0);H.direct_radiation.push(0);H.diffuse_radiation.push(0)}
+ OM=OMPTS.map(()=>H);T=H.time}
+const fmiURL=(h)=>{const e=new Date(),s=new Date(e-h*3600e3),iso=d=>d.toISOString().slice(0,19)+'Z';return'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::observations::weather::simple&fmisid=101004&parameters=r_1h,t2m,rh,ws_10min,wd_10min,snow_aws&timestep=60&starttime='+iso(s)+'&endtime='+iso(e)};
+const FMIQ='https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=';
+function parseBs(txt){const x=new DOMParser().parseFromString(txt,'text/xml'),out=[];for(const el of x.getElementsByTagNameNS('*','BsWfsElement')){const g=n=>el.getElementsByTagNameNS('*',n)[0]?.textContent;
+ const pos=(g('pos')||'').trim().split(/\s+/).map(Number);out.push({lat:pos[0],lon:pos[1],t:Math.round(Date.parse(g('Time'))/3600e3)*3600,p:g('ParameterName'),v:parseFloat(g('ParameterValue'))})}return out}
+const KNOWN=[['Kaisaniemi',60.1752,24.9446],['Kumpula',60.2031,24.9613],['Harmaja',60.1051,24.9754],['Malmi airfield',60.2525,25.0453],['Vuosaari harbour',60.2087,25.1957],['Isosaari',60.1032,25.0682],['Helsinki lighthouse',59.9487,24.9264],['Helsinki-Vantaa airport',60.3267,24.9568],['Espoo Tapiola',60.1781,24.7873]];
+async function loadStationsFMI(){
+ const e=new Date(),s0=new Date(e-48*3600e3),iso=d=>d.toISOString().slice(0,19)+'Z';
+ const r=await fetch(FMIQ+'fmi::observations::weather::simple&bbox=24.70,60.05,25.30,60.34&parameters=r_1h,t2m,td,rh,ws_10min,wd_10min,snow_aws&timestep=60&starttime='+iso(s0)+'&endtime='+iso(e));
+ if(!r.ok)throw new Error('HTTP '+r.status);const rows=parseBs(await r.text());if(!rows.length)throw new Error('empty');
+ const m=new Map();for(const q of rows){if(!isFinite(q.lat)||!isFinite(q.lon))continue;const k=q.lat.toFixed(4)+','+q.lon.toFixed(4);let st=m.get(k);
+  if(!st){const kn=KNOWN.map(([n,a,b])=>[n,km(a,b,q.lat,q.lon)]).sort((x,y)=>x[1]-y[1])[0];st={lat:q.lat,lon:q.lon,name:kn[1]<1?kn[0]:'FMI station',data:{}};m.set(k,st)}
+  if(isFinite(q.v))(st.data[q.t]=st.data[q.t]||{})[q.p]=q.v}
+ STNS=[...m.values()];const kum=STNS.slice().sort((a,b)=>km(a.lat,a.lon,KUMPULA[0],KUMPULA[1])-km(b.lat,b.lon,KUMPULA[0],KUMPULA[1]))[0];FMI=kum?kum.data:{}}
+async function loadHarm(){
+ const r=await fetch(FMIQ+'fmi::forecast::harmonie::surface::point::simple&latlon='+CEN[0]+','+CEN[1]+'&timestep=60&parameters=Temperature,DewPoint,WindSpeedMS,WindDirection,PrecipitationAmount,TotalCloudCover,RadiationGlobal');
+ if(!r.ok)throw new Error('HTTP '+r.status);const rows=parseBs(await r.text());if(!rows.length)throw new Error('empty');HARM={};for(const q of rows)if(isFinite(q.v))(HARM[q.t]=HARM[q.t]||{})[q.p]=q.v}
+function blendHarm(){DIS=new Float32Array(T.length);if(!HARM)return;
+ for(let i=nowIdx+1;i<T.length;i++){const hm=HARM[T[i]];if(!hm)continue;let pom=0;for(const h of OM)pom+=(h.precipitation[i]??0)/OM.length;
+  const phm=isFinite(hm.PrecipitationAmount)?Math.max(0,hm.PrecipitationAmount):pom,mx=Math.max(pom,phm);DIS[i]=mx>.1?Math.abs(pom-phm)/(.1+mx):0;
+  for(const h of OM){const av=(v,x)=>{if(isFinite(x)&&h[v][i]!=null)h[v][i]=(h[v][i]+x)/2};
+   av('temperature_2m',hm.Temperature);av('dew_point_2m',hm.DewPoint);av('wind_speed_10m',hm.WindSpeedMS);av('cloud_cover',hm.TotalCloudCover);av('precipitation',phm);
+   if(isFinite(hm.RadiationGlobal)){const sw0=h.shortwave_radiation[i]||0,sw1=(sw0+hm.RadiationGlobal)/2,f=sw0>1?sw1/sw0:1;h.shortwave_radiation[i]=sw1;h.direct_radiation[i]*=f;h.diffuse_radiation[i]=sw0>1?h.diffuse_radiation[i]*f:sw1}
+   if(h.dew_point_2m[i]>h.temperature_2m[i])h.dew_point_2m[i]=h.temperature_2m[i]}}}
+async function loadFMI(){
+ const r=await fetch(fmiURL(48));if(!r.ok)throw new Error('HTTP '+r.status);
+ const x=new DOMParser().parseFromString(await r.text(),'text/xml');FMI={};
+ for(const el of x.getElementsByTagNameNS('*','BsWfsElement')){const g=n=>el.getElementsByTagNameNS('*',n)[0]?.textContent;
+  const t=Math.round(Date.parse(g('Time'))/3600e3)*3600;(FMI[t]=FMI[t]||{})[g('ParameterName')]=parseFloat(g('ParameterValue'))}
+ if(!Object.keys(FMI).length)throw new Error('empty')}
+function keli(sv){const d=((sv.sensorValueDescriptionEn||'')+' '+(sv.sensorValueDescriptionFi||'')).toLowerCase();
+ if(/snow|lumi|slush|sohjo/.test(d))return'snow';if(/\bice\b|jää|frost|kuura|icy/.test(d))return'ice';
+ if(/wet|märkä/.test(d))return'wet';if(/moist|damp|kostea/.test(d))return'damp';if(/dry|kuiva/.test(d))return'dry';
+ return{1:'dry',2:'damp',3:'wet',4:'wet',5:'ice',6:'snow',7:'ice',8:'damp',9:'snow'}[Math.round(sv.value)]||null}
+async function loadStations(){
+ const g=await getJSON('https://tie.digitraffic.fi/api/weather/v1/stations');
+ const near=g.features.map(f=>({id:f.id??f.properties.id,name:f.properties.name,lon:f.geometry.coordinates[0],lat:f.geometry.coordinates[1]}))
+  .map(s=>({...s,d:km(CEN[0],CEN[1],s.lat,s.lon)})).filter(s=>s.d<16).sort((a,b)=>a.d-b.d).slice(0,16);
+ const now=Date.now();
+ ST=await Promise.all(near.map(async s=>{try{const d=await getJSON('https://tie.digitraffic.fi/api/weather/v1/stations/'+s.id+'/data');
+  const sv=(d.sensorValues||[]).filter(v=>!v.measuredTime||now-Date.parse(v.measuredTime)<3*3600e3),f=re=>sv.find(v=>re.test(v.name||''));
+  const k=f(/^KELI_?1$/)||f(/^KELI/),rt=f(/^TIE_?1$/)||f(/^TIE_\d$/),at=f(/^ILMA$/);
+  return{...s,cls:k?keli(k):null,desc:k?(k.sensorValueDescriptionEn||k.sensorValueDescriptionFi||''):'',roadT:rt?.value,airT:at?.value}}catch(e){return{...s,cls:null}}}));
+ if(!ST.some(s=>s.cls||s.roadT!=null))throw new Error('no data')}
+async function loadCams(){
+ const g=await getJSON('https://tie.digitraffic.fi/api/weathercam/v1/stations');
+ CAMS=g.features.map(f=>{const p=f.properties,pr=(p.presets||[]).filter(x=>x.inCollection!==false);
+  return{id:f.id??p.id,name:p.name,lon:f.geometry.coordinates[0],lat:f.geometry.coordinates[1],presets:pr.map(x=>x.id),status:p.collectionStatus,pi:0}})
+  .filter(c=>c.presets.length&&c.status!=='REMOVED_TEMPORARILY'&&c.lat>HB.s&&c.lat<HB.n&&c.lon>HB.w&&c.lon<HB.e)}
+
+/* ================= WMS helpers ================= */
+const polySLD=l=>'<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc"><NamedLayer><Name>'+l+'</Name><UserStyle><FeatureTypeStyle><Rule><PolygonSymbolizer><Fill><CssParameter name="fill">#000000</CssParameter></Fill></PolygonSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer></StyledLayerDescriptor>';
+const radSLD='<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc"><NamedLayer><Name>'+RLAY+'</Name><UserStyle><FeatureTypeStyle><Rule><RasterSymbolizer><ColorMap type="ramp"><ColorMapEntry color="#000000" quantity="0.04" opacity="0"/><ColorMapEntry color="#010101" quantity="0.05" opacity="1"/><ColorMapEntry color="#ffffff" quantity="25.5" opacity="1"/></ColorMap></RasterSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer></StyledLayerDescriptor>';
+async function wmsPixels(base,q,w,h){
+ const r=await fetch(base+'?'+new URLSearchParams(q));if(!r.ok)throw new Error('HTTP '+r.status);
+ if(!/image/.test(r.headers.get('content-type')||'')){const t=await r.text();throw new Error('server: '+t.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,90))}
+ const bm=await createImageBitmap(await r.blob()),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(bm,0,0,w,h);return x.getImageData(0,0,w,h).data}
+const wmsQ=(layer,bb,w,h,extra)=>({SERVICE:'WMS',VERSION:'1.1.1',REQUEST:'GetMap',LAYERS:layer,STYLES:'',SRS:'EPSG:4326',BBOX:[bb.w,bb.s,bb.e,bb.n].join(','),WIDTH:w,HEIGHT:h,FORMAT:'image/png',TRANSPARENT:'TRUE',...extra});
+const symb={poly:'<PolygonSymbolizer><Fill><CssParameter name="fill">#000000</CssParameter></Fill></PolygonSymbolizer>',
+ line:'<LineSymbolizer><Stroke><CssParameter name="stroke">#000000</CssParameter><CssParameter name="stroke-width">1</CssParameter></Stroke></LineSymbolizer>',
+ point:'<PointSymbolizer><Graphic><Mark><WellKnownName>circle</WellKnownName><Fill><CssParameter name="fill">#000000</CssParameter></Fill></Mark><Size>1.3</Size></Graphic></PointSymbolizer>'};
+const anySLD=(l,k)=>'<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc"><NamedLayer><Name>'+l+'</Name><UserStyle><FeatureTypeStyle><Rule>'+symb[k]+'</Rule></FeatureTypeStyle></UserStyle></NamedLayer></StyledLayerDescriptor>';
+const HELWMS='https://kartta.hel.fi/ws/geoserver/avoindata/wms';
+async function helCov(layer,kind,bb=BB,w=RX,h=RY){let last;
+ for(const useSld of[true,false]){try{const d=await wmsPixels(HELWMS,wmsQ(layer,bb,w*2,h*2,useSld?{SLD_BODY:anySLD(layer,kind)}:{}),w,h);const a=new Float32Array(w*h);for(let i=0;i<a.length;i++)a[i]=d[i*4+3]/255;return a}
+  catch(e){last=e;if(e instanceof TypeError)throw e}}throw last}
+async function hsyCov(layer,bb=BB,w=RX,h=RY){let last;
+ for(const useSld of[true,false]){try{const d=await wmsPixels(HSYW,wmsQ(layer,bb,w*2,h*2,useSld?{SLD_BODY:polySLD(layer)}:{}),w,h);const a=new Float32Array(w*h);for(let i=0;i<a.length;i++)a[i]=d[i*4+3]/255;return a}
+  catch(e){last=e;if(e instanceof TypeError)throw e}}throw last}
+
+/* ================= cover data (HSY + Helsinki + OSM fallback) ================= */
+const OVP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+async function overpass(q){let err;for(const u of OVP){try{return await getJSON(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)})}catch(e){err=e}}throw err}
+const px=g=>[(g.lon-BB.w)/(BB.e-BB.w)*RX,(BB.n-g.lat)/(BB.n-BB.s)*RY];
+function canvasR(){const c=document.createElement('canvas');c.width=RX;c.height=RY;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.strokeStyle='#fff';return[c,x]}
+const alphaOf=x=>{const d=x.getImageData(0,0,RX,RY).data,a=new Float32Array(RX*RY);for(let i=0;i<a.length;i++)a[i]=d[i*4+3]/255;return a};
+const path=(x,g)=>{x.beginPath();g.forEach((p,k)=>{const[u,v]=px(p);k?x.lineTo(u,v):x.moveTo(u,v)})};
+function polys(x,els,wf){for(const w of els){const g=w.geometry;if(!g||g.length<3)continue;const a=wf(w);if(!a)continue;x.globalAlpha=a;path(x,g);x.closePath();x.fill()}x.globalAlpha=1}
+function osmWater(ways){
+ const[c,x]=canvasR();x.lineWidth=1.3;for(const w of ways)if(w.geometry){path(x,w.geometry);x.stroke()}
+ const bar=alphaOf(x).map(v=>v>.15?1:0),lab=new Int32Array(RX*RY).fill(-1),q=new Int32Array(RX*RY);let nl=0;
+ for(let s=0;s<lab.length;s++){if(bar[s]||lab[s]>=0)continue;let h=0,t=0;q[t++]=s;lab[s]=nl;
+  while(h<t){const p=q[h++],i=p%RX,j=(p-i)/RX;for(const n of[i>0?p-1:-1,i<RX-1?p+1:-1,j>0?p-RX:-1,j<RY-1?p+RX:-1])if(n>=0&&!bar[n]&&lab[n]<0){lab[n]=nl;q[t++]=n}}nl++}
+ const vw=new Float32Array(nl),vl=new Float32Array(nl),vote=(u,v,arr)=>{const i=Math.round(u),j=Math.round(v);if(i<0||j<0||i>=RX||j>=RY)return;const l=lab[j*RX+i];if(l>=0)arr[l]++};
+ for(const w of ways){const g=w.geometry;if(!g)continue;for(let k=1;k<g.length;k++){const[a,b]=px(g[k-1]),[c2,d]=px(g[k]),dx=c2-a,dy=d-b,L2=Math.hypot(dx,dy);if(L2<1.2)continue;
+  const mx=(a+c2)/2,my=(b+d)/2,rx=-dy/L2,ry=dx/L2;for(const o of[1.6,2.6]){vote(mx+rx*o,my+ry*o,vw);vote(mx-rx*o,my-ry*o,vl)}}}
+ const out=new Float32Array(RX*RY);for(let s=0;s<out.length;s++)out[s]=bar[s]?.5:(lab[s]>=0&&vw[lab[s]]>vl[lab[s]]?1:0);return out}
+function osmHeights(els){const[c,x]=canvasR();
+ const L2=els.filter(w=>w.geometry&&w.geometry.length>2).map(w=>{const t=w.tags||{};let h=parseFloat(t.height);if(!(h>0)&&parseFloat(t['building:levels'])>0)h=parseFloat(t['building:levels'])*3.3+2;return[w,h>0?Math.min(250,h):0]}).sort((a,b)=>a[1]-b[1]);
+ for(const[w,h]of L2){if(!h)continue;x.fillStyle='rgb('+Math.round(h)+',0,0)';path(x,w.geometry);x.closePath();x.fill()}
+ const d=x.getImageData(0,0,RX,RY).data,o=new Float32Array(RX*RY);for(let i=0;i<o.length;i++)o[i]=d[i*4+3]>128?d[i*4]:0;return o}
+async function helPoints(){
+ const q=bb=>HELW+'?service=WFS&version=2.0.0&request=GetFeature&typeNames=avoindata:Rakennukset_piste_rekisteritiedot&propertyName=i_kerrlkm,geom&outputFormat=application/json&srsName=EPSG:4326&count=100000&bbox='+bb+',EPSG:4326';
+ let j=await getJSON(q([BB.w,BB.s,BB.e,BB.n].join(',')));
+ if(!(j.features||[]).length)j=await getJSON(q([BB.s,BB.w,BB.n,BB.e].join(',')));
+ const out=[];for(const f of j.features||[]){const c=f.geometry&&f.geometry.coordinates;if(!c)continue;let[a,b]=c;if(a>50){[a,b]=[b,a]}const fl=f.properties&&f.properties.i_kerrlkm;if(fl>0)out.push([b,a,fl])}
+ if(!out.length)throw new Error('no buildings returned');return out}
+const COVKEY='dryCover3_'+NX+'x'+NY;
+async function loadCover(part){
+ const c=ls.get(COVKEY);
+ if(c){try{const o=JSON.parse(c);if(Date.now()-o.t<30*864e5){coverInfo=o.info;deriveCover(Object.fromEntries(Object.entries(o.r).map(([k,v])=>[k,b64d(v)])));return}}catch(e){}}
+ const R8={},info={};const n=RX*RY;
+ /* HSY land cover */
+ let hsy=null;for(const y of[2024,2022]){try{part('HSY land cover '+y,'…');const L2=hsyL(y);
+  const arr=await Promise.all([...L2.tree,L2.bld,...L2.water,L2.road,L2.imp].map(l=>hsyCov(l)));hsy={y,arr};part('HSY land cover '+y,true);break}
+  catch(e){part('HSY land cover '+y,why(e));if(e instanceof TypeError)break}}
+ let wat=null,bc=null,tc=null,th=null,road=null,imp=null,bh=null;
+ if(hsy){const[t1,t2,t3,t4,b,w1,w2,rd,im]=hsy.arr;wat=new Float32Array(n);tc=new Float32Array(n);th=new Float32Array(n);
+  for(let i=0;i<n;i++){wat[i]=Math.min(1,w1[i]+w2[i]);const cs=[t1[i],t2[i],t3[i],t4[i]];let keep=1,sh=0,sc=0;cs.forEach((v,k)=>{keep*=1-v;sh+=v*TREEH[k];sc+=v});tc[i]=1-keep;th[i]=sc>0?sh/sc:0}
+  bc=b;road=rd;imp=im;info.water=info.bld=info.tree='HSY '+hsy.y;info.paved=true}
+ /* City of Helsinki map data */
+ let hel=null;
+ if(!hsy){try{part('Helsinki city map data','…');
+  const HL2=[['avoindata:Maavesi_merialue','poly'],['avoindata:Maavesi_muut_vesialueet','poly'],['avoindata:Rakennukset_alue','poly'],['avoindata:LTJ_avoin_metsaverkosto_2015','poly'],['avoindata:Seutukartta_maankaytto_viheralueet','poly'],['avoindata:Puurekisteri_piste','point'],['avoindata:Liikennevaylat','line']];
+  const res=await Promise.allSettled(HL2.map(([l,k])=>helCov(l,k)));const got=res.map(r=>r.status==='fulfilled'?r.value:null);
+  if(!got[0]||!got[2])throw new Error((res[0].reason||res[2].reason||{}).message||'water or buildings missing');
+  const z=new Float32Array(n),[w1,w2,b,fo,gr,tp,rd]=got.map(a=>a||z);wat=new Float32Array(n);tc=new Float32Array(n);th=new Float32Array(n);
+  for(let i=0;i<n;i++){wat[i]=Math.min(1,w1[i]+w2[i]);const f=fo[i]*.9,g=gr[i]*.35,t=Math.min(1,tp[i]*1.5);tc[i]=1-(1-f)*(1-g)*(1-t);const sc=f+g+t;th[i]=sc>0?(18*f+10*g+12*t)/sc:0}
+  bc=b;road=got[6];imp=null;hel=true;info.water=info.bld=info.tree='City of Helsinki';info.paved=false;
+  part('Helsinki city map data',true);const miss=HL2.filter((x,i)=>!got[i]).map(x=>x[0].split(':')[1]);if(miss.length)part('Helsinki layers missing: '+miss.join(', '),'partial')}
+  catch(e){part('Helsinki city map data',why(e))}}
+ /* OSM fallback */
+ let osmB=null;
+ if(!hsy&&!hel){part('OpenStreetMap (fallback)','…');try{
+  const bb=BB.s+','+BB.w+','+BB.n+','+BB.e,bm=(BB.s-.02)+','+(BB.w-.03)+','+(BB.n+.02)+','+(BB.e+.03);
+  prog('Downloading shoreline…');wat=osmWater((await overpass('[out:json][timeout:90];way["natural"="coastline"]('+bm+');out geom;')).elements||[]);
+  prog('Downloading buildings (up to a minute)…');osmB=(await overpass('[out:json][timeout:180];way["building"]('+bb+');out geom qt;')).elements||[];
+  {const[cc,x]=canvasR();polys(x,osmB,()=>1);bc=alphaOf(x)}
+  prog('Downloading trees and parks…');const els=(await overpass('[out:json][timeout:120];(way["natural"~"^(wood|scrub|tree_row)$"]('+bb+');way["landuse"~"^(forest|cemetery)$"]('+bb+');way["leisure"~"^(park|garden)$"]('+bb+');node["natural"="tree"]('+bb+'););out geom qt;')).elements||[];
+  {const[cc,x]=canvasR();polys(x,els.filter(e=>e.type==='way'),w=>{const t=w.tags||{};return t.natural==='wood'||t.landuse==='forest'?.9:t.natural==='scrub'?.6:t.landuse==='cemetery'?.5:t.natural==='tree_row'?.7:.35});
+   const r=6/RPX;for(const e of els)if(e.type==='node'){const[u,v]=px(e);x.beginPath();x.arc(u,v,r,0,7);x.fill()}tc=alphaOf(x);th=new Float32Array(n).fill(12)}
+  info.water=info.bld=info.tree='OpenStreetMap';part('OpenStreetMap (fallback)',true)}catch(e){part('OpenStreetMap (fallback)',why(e));throw new Error('no cover data')}}
+ /* building heights: Helsinki register floors, else OSM tags, else 12 m */
+ bh=new Float32Array(n);let hsrc='default 12 m';
+ try{part('Helsinki building storeys','…');const pts=await helPoints();
+  for(const[lat,lon,fl]of pts){const[u,v]=px({lat,lon}),i0=Math.floor(u),j0=Math.floor(v),h=Math.min(250,fl*3.3+2);
+   for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=RX||j>=RY)continue;const p=j*RX+i;if(h>bh[p])bh[p]=h}}
+  hsrc='Helsinki register';part('Helsinki building storeys',true)}catch(e){part('Helsinki building storeys',why(e));if(osmB){bh=osmHeights(osmB);hsrc='OpenStreetMap tags'}}
+ for(let pass=0;pass<3;pass++){const b2=bh.slice();for(let j=1;j<RY-1;j++)for(let i=1;i<RX-1;i++){const p=j*RX+i;if(b2[p]||bc[p]<.05)continue;bh[p]=Math.max(b2[p-1],b2[p+1],b2[p-RX],b2[p+RX])}}
+ for(let p=0;p<n;p++)bh[p]=bc[p]>.05?(bh[p]||12):0;info.hgt=hsrc;
+ const q8=(a,s)=>{const u=new Uint8Array(n);for(let i=0;i<n;i++)u[i]=Math.round(clamp(a[i]*s,0,255));return u};
+ R8.wat=q8(wat,255);R8.bc=q8(bc,255);R8.bh=q8(bh,1);R8.tc=q8(tc,255);R8.th=q8(th,1);if(road)R8.road=q8(road,255);if(imp)R8.imp=q8(imp,255)
+ coverInfo=info;ls.set(COVKEY,JSON.stringify({t:Date.now(),info,r:Object.fromEntries(Object.entries(R8).map(([k,v])=>[k,b64e(v)]))}));
+ deriveCover(R8)}
+function deriveCover(r){
+ const W8=r.wat,BC=r.bc,BHr=r.bh,TC=r.tc,TH=r.th;
+ const down=a=>{const o=new Uint8Array(N);for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){let s=0;for(let b=0;b<RF;b++)for(let c=0;c<RF;c++)s+=a[(j*RF+b)*RX+i*RF+c];o[j*NX+i]=Math.round(s/(RF*RF))}return o};
+ WAT=down(W8);BLD=down(BC);TRE=down(TC);ROAD=r.road?down(r.road):null;IMP=r.imp?down(r.imp):null;
+ BH50=new Uint8Array(N);const TH50=new Uint8Array(N);
+ for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){let m=0,t=0;for(let b=0;b<RF;b++)for(let c=0;c<RF;c++){const p=(j*RF+b)*RX+i*RF+c;if(BHr[p]>m)m=BHr[p];if(TH[p]>t)t=TH[p]}BH50[j*NX+i]=m;TH50[j*NX+i]=t}
+ /* skyline per cell and direction from 25 m rasters */
+ HORB=new Uint8Array(N*16);HORT=new Uint8Array(N*16);SVF=new Uint8Array(N);
+ const dirs=[];for(let b=0;b<16;b++){const a=b*22.5*R;dirs.push([Math.sin(a),-Math.cos(a)])}
+ for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const k=j*NX+i,cx=(i+.5)*RF,cy=(j+.5)*RF;let sv=0;
+  for(let b=0;b<16;b++){let hb=0,ht=0;const[dx,dy]=dirs[b];
+   for(const d of DS){const u=Math.floor(cx+dx*d/RPX),v=Math.floor(cy+dy*d/RPX);if(u<0||v<0||u>=RX||v>=RY)continue;const p=v*RX+u;
+    if(BC[p]>75){const a=Math.atan2(BHr[p],d)/R;if(a>hb)hb=a}if(TC[p]>90){const a=Math.atan2(TH[p],d)/R;if(a>ht)ht=a}}
+   HORB[k*16+b]=Math.round(hb*2);HORT[k*16+b]=Math.round(ht*2);const g=Math.max(hb,ht*(TOPAC+.1))*R;sv+=Math.cos(g)**2}
+  SVF[k]=Math.round(100*sv/16)}
+ /* wind: open water and height-aware shelter upwind */
+ OPEN=new Uint8Array(N*16);OBS=new Uint8Array(N*16);
+ const off=[];for(let b=0;b<16;b++){const a=b*22.5*R;off.push(DD.map(d=>[Math.round(d*Math.sin(a)/CELL),-Math.round(d*Math.cos(a)/CELL),1/(1+d/150),d]))}
+ for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const k=j*NX+i;
+  for(let b=0;b<16;b++){let ow=0,ob=0,ws=0;for(const[di,dj,w,d]of off[b]){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=NX||jj>=NY)continue;const q=jj*NX+ii;
+    ow+=w*WAT[q]/255;ob+=w*(BLD[q]/255*Math.min(1,10*BH50[q]/d)+.6*TRE[q]/255*Math.min(1,10*TH50[q]/d));ws+=w}
+   OPEN[k*16+b]=ws?Math.round(100*ow/ws):0;OBS[k*16+b]=ws?Math.round(100*Math.min(1,ob/ws)):0}}
+ haveCover=true}
+
+/* ================= radar ================= */
+const slotNow=()=>Math.floor((Date.now()/1000-600)/900)*900;
+const isoT=t=>new Date(t*1000).toISOString().slice(0,19)+'Z';
+async function radarFrame(t){const d=await wmsPixels(FMIW,wmsQ(RLAY,BB,RW*2,RH*2,{SLD_BODY:radSLD,TIME:isoT(t)}),RW,RH);
+ const a=new Float32Array(RW*RH);let sat=0,wet=0;for(let i=0;i<a.length;i++){if(d[i*4+3]>40){const v=d[i*4]/10;if(v>=.1){wet++;a[i]=v;if(d[i*4]>=254)sat++}}}
+ if(wet>20&&sat/wet>.5)throw new Error('values out of range');return a}
+async function loadRadar(){
+ radarMsg='';const latest=slotNow(),need=[];for(let k=0;k<=97;k++){const t=latest-k*900;if(!RFR.has(t))need.push(t)}
+ for(const t of[...RFR.keys()])if(t<latest-100*900)RFR.delete(t);
+ let ok=0,fail=0,lastErr=null;
+ const first=need.shift();if(first!=null){try{RFR.set(first,await radarFrame(first));ok++}catch(e){lastErr=e;if(e instanceof TypeError||/server/.test(e.message)){radarNum=false;throw e}RFR.set(first,null);fail++}}
+ for(let i=0;i<need.length;i+=8){await Promise.all(need.slice(i,i+8).map(async t=>{try{RFR.set(t,await radarFrame(t));ok++}catch(e){RFR.set(t,null);fail++;lastErr=e}}));prog('Reading rain radar… '+Math.round(100*(i+8)/need.length)+'%')}
+ prog('');let lt=latest;while(lt>latest-4*900&&!RFR.get(lt))lt-=900;radarLatest=RFR.get(lt)?lt:0;
+ if(!radarLatest)throw new Error(lastErr?why(lastErr):'no recent frames');radarClutter=declutter();radarNum=true;buildRadarHours()}
+function declutter(){const fr=[...RFR.values()].filter(Boolean);if(fr.length<8)return 0;const n=RW*RH,cnt=new Uint16Array(n);let tot=0;
+ for(const f of fr){let w=0;for(let p=0;p<n;p++)if(f[p]>0){cnt[p]++;w++}tot+=w/n}if(tot/fr.length>.3)return 0;
+ const bad=[];for(let p=0;p<n;p++)if(cnt[p]/fr.length>.5)bad.push(p);for(const f of fr)for(const p of bad)f[p]=0;return bad.length}
+const GK=(()=>{const s2=2,r=5,k=[];let t=0;for(let i=-r;i<=r;i++){const v=Math.exp(-i*i/(2*s2*s2));k.push(v);t+=v}return k.map(v=>v/t)})();
+function blur(a){const r=(GK.length-1)/2,t=new Float32Array(a.length),o=new Float32Array(a.length);
+ for(let j=0;j<RH;j++)for(let i=0;i<RW;i++){let s=0,w=0;for(let q=-r;q<=r;q++){const ii=i+q;if(ii<0||ii>=RW)continue;s+=a[j*RW+ii]*GK[q+r];w+=GK[q+r]}t[j*RW+i]=s/w}
+ for(let j=0;j<RH;j++)for(let i=0;i<RW;i++){let s=0,w=0;for(let q=-r;q<=r;q++){const jj=j+q;if(jj<0||jj>=RH)continue;s+=t[jj*RW+i]*GK[q+r];w+=GK[q+r]}o[j*RW+i]=s/w}return o}
+const radXY=(lat,lon)=>[clamp((lon-BB.w)/(BB.e-BB.w)*RW-.5,0,RW-1.001),clamp((BB.n-lat)/(BB.n-BB.s)*RH-.5,0,RH-1.001)];
+function radS(a,x,y){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,i1=Math.min(RW-1,i+1),j1=Math.min(RH-1,j+1);
+ return(a[j*RW+i]*(1-fx)+a[j*RW+i1]*fx)*(1-fy)+(a[j1*RW+i]*(1-fx)+a[j1*RW+i1]*fx)*fy}
+function motion(a,b){let best=[0,0],be=1e9,cnt=0;for(let i=0;i<a.length;i++)if(a[i]>.1||b[i]>.1)cnt++;if(cnt<15)return[0,0];
+ for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){let e=0,n=0;for(let j=4;j<RH-4;j++)for(let i=4;i<RW-4;i++){const v=b[j*RW+i],u=a[(j-dy)*RW+(i-dx)];if(v>.1||u>.1){e+=Math.abs(v-u);n++}}if(n>10&&e/n<be){be=e/n;best=[dx,dy]}}return best}
+function buildRadarHours(){
+ RAD=new Map();const BF=new Map();const bf=t=>{if(!BF.has(t)){const f=RFR.get(t);BF.set(t,f?blur(f):null)}return BF.get(t)};const L0=bf(radarLatest),L1=bf(radarLatest-900);const mv=L1?motion(L1,L0):[0,0];
+ const slot=t=>{if(t<=radarLatest)return bf(t);const m=Math.round((t-radarLatest)/900);if(m>8)return null;const o=new Float32Array(RW*RH),f=Math.pow(.92,m);
+  for(let j=0;j<RH;j++)for(let i=0;i<RW;i++){const si=Math.round(i-mv[0]*m),sj=Math.round(j-mv[1]*m);if(si<0||sj<0||si>=RW||sj>=RH)continue;o[j*RW+i]=L0[sj*RW+si]*f}return o};
+ for(let i=0;i<T.length;i++){const te=T[i];if(te<radarLatest-24*3600||te>radarLatest+2*3600+900)continue;
+  const fr=[];for(let t=te-2700;t<=te;t+=900){const f=slot(t);if(f)fr.push(f)}if(fr.length<2)continue;
+  const o=new Float32Array(RW*RH);for(const f of fr)for(let p=0;p<o.length;p++)o[p]+=f[p]/fr.length;RAD.set(i,o)}
+ let rs=0,gs=0,ng=0;const gauges=STNS.length?STNS.filter(st=>st.lat>BB.s&&st.lat<BB.n&&st.lon>BB.w&&st.lon<BB.e):[{lat:KUMPULA[0],lon:KUMPULA[1],data:FMI}];
+ for(const st of gauges){const[kx,ky]=radXY(st.lat,st.lon);let any=false;for(const[i,a]of RAD)if(T[i]<=radarLatest){const o=st.data[T[i]];if(o&&isFinite(o.r_1h)){rs+=radS(a,kx,ky);gs+=Math.max(0,o.r_1h);any=true}}if(any)ng++}
+ const nn=Math.max(1,ng);gCorr=(rs>.5*nn||gs>.5*nn)?clamp((gs+.2*nn)/(rs+.2*nn),.25,2):1;radK={rs:rs/nn,gs:gs/nn,n:ng};
+ radarMax=0;for(const v of RFR.get(radarLatest))if(v>radarMax)radarMax=v}
+let radAnim=null;
+const rad5=()=>Math.floor((Date.now()/1000-600)/300)*300;
+function radSync(){const on=layerId==='liveradar'||map.hasLayer(radarLayer);if(layerId==='liveradar'&&!map.hasLayer(radarLayer))radarLayer.addTo(map);$('radRow').style.display=on?'':'none'}
+function radShow(t){radarLayer.setParams({time:isoT(t)});$('radT').textContent='Radar '+new Date(t*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Helsinki'})+(radarNum&&radarClutter?' · '+radarClutter+' clutter patches removed':'')}
+function radarTime(){radSync();if(!map.hasLayer(radarLayer)||radAnim)return;const h=hi(),off=+$('slider').value;radShow(off>=0?rad5():Math.floor(Math.min(T[h]||0,rad5())/300)*300)}
+
+/* ================= model ================= */
+function forcing(lat,lon){const F=forcingRaw(lat,lon);if(!RESID.length)return F;
+ const ws=RESID.map(r=>{const d=km(lat,lon,r.lat,r.lon);return{r,w:1/(d*d+1),d}}),near=ws.reduce((a,b)=>a.d<b.d?a:b);
+ const add=(key,v,i,decay)=>{let sw=0,sv=0;for(const x of ws){const z=x.r[key][i];if(Number.isFinite(z)){sw+=x.w;sv+=x.w*z}}return sw?sv/sw*decay:0};
+ for(let i=0;i<=Math.min(T.length-1,nowIdx+6);i++){const ii=Math.min(i,nowIdx),dec=i<=nowIdx?1:Math.exp(-(i-nowIdx)/3);
+  F.temperature_2m[i]+=add('dT',0,ii,dec);F.dew_point_2m[i]+=add('dTd',0,ii,dec);if(F.dew_point_2m[i]>F.temperature_2m[i])F.dew_point_2m[i]=F.temperature_2m[i];
+  if(i<=nowIdx){let sw=0,sv=0;for(const x of ws){const z=x.r.wsr[i];if(Number.isFinite(z)){sw+=x.w;sv+=x.w*Math.log(z)}}if(sw)F.wind_speed_10m[i]*=Math.exp(sv/sw);
+   if(near.d<6){const wd=near.r.wd[i];if(Number.isFinite(wd))F.wind_direction_10m[i]=wd;const pr=near.r.pr[i];if(Number.isFinite(pr))F.precipitation[i]=.5*F.precipitation[i]+.5*pr}}}
+ return F}
+function buildResid(){RESID=[];for(const st of STNS){const F=forcingRaw(st.lat,st.lon),mk=()=>new Float32Array(T.length).fill(NaN),r={lat:st.lat,lon:st.lon,dT:mk(),dTd:mk(),wsr:mk(),wd:mk(),pr:mk()};let n=0;
+ for(let i=0;i<=nowIdx;i++){const o=st.data[T[i]];if(!o)continue;n++;if(Number.isFinite(o.t2m))r.dT[i]=o.t2m-F.temperature_2m[i];if(Number.isFinite(o.td))r.dTd[i]=o.td-F.dew_point_2m[i];
+  if(Number.isFinite(o.ws_10min)&&F.wind_speed_10m[i]>.3)r.wsr[i]=clamp(o.ws_10min/F.wind_speed_10m[i],.4,2.5);if(Number.isFinite(o.wd_10min))r.wd[i]=o.wd_10min;if(Number.isFinite(o.r_1h))r.pr[i]=Math.max(0,o.r_1h)}if(n)RESID.push(r)}}
+function forcingRaw(lat,lon){
+ const w=OMPTS.map(p=>1/(km(lat,lon,p[0],p[1])**2+.05)),ws=w.reduce((a,b)=>a+b,0);let ni=0;w.forEach((v,i)=>{if(v>w[ni])ni=i});
+ const F={};for(const v of HV){const a=new Float32Array(T.length);
+  if(v==='wind_direction_10m')for(let i=0;i<T.length;i++)a[i]=OM[ni][v]?.[i]??0;
+  else for(let i=0;i<T.length;i++){let s=0;for(let k=0;k<Math.min(OM.length,w.length);k++)s+=w[k]*(OM[k][v]?.[i]??0);a[i]=s/ws}F[v]=a}
+ if(!STNS.length)for(let i=0;i<=nowIdx;i++){const o=FMI[T[i]];if(o&&isFinite(o.r_1h))F.precipitation[i]=.5*F.precipitation[i]+.5*Math.max(0,o.r_1h)}
+ return F}
+function buildForcing(){
+ COARSE=[];for(let cj=0;cj<CY;cj++)for(let ci=0;ci<CX;ci++)COARSE.push(forcing(BB.n-cj/(CY-1)*(BB.n-BB.s),BB.w+ci/(CX-1)*(BB.e-BB.w)));
+ CI=new Uint16Array(N);for(let j=0;j<NY;j++)for(let i=0;i<NX;i++)CI[j*NX+i]=Math.round(j/(NY-1)*(CY-1))*CX+Math.round(i/(NX-1)*(CX-1));
+ SUN=T.map(t=>sunPos(t-1800,CEN[0],CEN[1]))}
+const BLV=HV.filter(v=>v!=='wind_direction_10m'),BFC={};
+function blendF(lat,lon){if(!BFC.temperature_2m||BFC.temperature_2m.length!==T.length)for(const v of HV)BFC[v]=new Float32Array(T.length);
+ const y=clamp((BB.n-lat)/(BB.n-BB.s),0,1)*(CY-1),x=clamp((lon-BB.w)/(BB.e-BB.w),0,1)*(CX-1),y0=Math.min(CY-2,Math.floor(y)),x0=Math.min(CX-2,Math.floor(x)),fy=y-y0,fx=x-x0;
+ const a=COARSE[y0*CX+x0],b=COARSE[y0*CX+x0+1],c=COARSE[(y0+1)*CX+x0],d=COARSE[(y0+1)*CX+x0+1],wa=(1-fx)*(1-fy),wb=fx*(1-fy),wc=(1-fx)*fy,wd=fx*fy;
+ for(const v of BLV){const o=BFC[v],A=a[v],B2=b[v],C=c[v],D=d[v];for(let i=H0;i<=H1;i++)o[i]=wa*A[i]+wb*B2[i]+wc*C[i]+wd*D[i]}
+ const nn=[a,b,c,d][[wa,wb,wc,wd].indexOf(Math.max(wa,wb,wc,wd))];BFC.wind_direction_10m=nn.wind_direction_10m;return BFC}
+const fAt=(lat,lon)=>COARSE[Math.round(clamp((BB.n-lat)/(BB.n-BB.s),0,1)*(CY-1))*CX+Math.round(clamp((lon-BB.w)/(BB.e-BB.w),0,1)*(CX-1))];
+function fBil(v,lat,lon,i){const y=clamp((BB.n-lat)/(BB.n-BB.s),0,1)*(CY-1),x=clamp((lon-BB.w)/(BB.e-BB.w),0,1)*(CX-1),y0=Math.min(CY-2,Math.floor(y)),x0=Math.min(CX-2,Math.floor(x)),fy=y-y0,fx=x-x0;
+ const g=(a,b)=>COARSE[(y0+a)*CX+x0+b][v][i];return(g(0,0)*(1-fx)+g(0,1)*fx)*(1-fy)+(g(1,0)*(1-fx)+g(1,1)*fx)*fy}
+let EVL=[];
+function evidenceList(){const out=[],now=Date.now();
+ for(const[id,e]of Object.entries(EV))if(id.startsWith('pt-')&&now-e.t<3*3600e3)out.push({lat:e.lat,lon:e.lon,c:e.cls,w0:3,L:.6});
+ for(const s of ST)if(s.cls)out.push({lat:s.lat,lon:s.lon,c:s.cls,w0:1,L:2.5});
+ for(const c of CAMS.concat(EXT)){const e=EV[c.id]&&now-EV[c.id].t<3*3600e3?EV[c.id]:EVA[c.id];if(!e)continue;
+  out.push({lat:c.lat,lon:c.lon,c:e.cls,w0:(e.src==='you'?3:e.src==='claude'?1.6:1)*(e.conf??.6),L:1})}
+ EVL=out}
+function nudges(lat,lon){let sw=0,sW=0,sS=0,sI=0,ow=0,oo=0;
+ for(const n of EVL){const w=n.w0*Math.exp(-km(lat,lon,n.lat,n.lon)/n.L);if(w<.01)continue;sw+=w;sW+=w*CLS[n.c].W;sS+=w*CLS[n.c].S;sI+=w*(CLS[n.c].I||0)}
+ for(const s of ST)if(s.roadT!=null){const w=Math.exp(-km(lat,lon,s.lat,s.lon)/4);ow+=w;oo+=w*s.roadT}
+ return{sw,sW,sS,sI,roadT:ow>0?oo/ow:null}}
+function profOf(k,site,lat,lon){
+ const rxy=radXY(lat,lon),base={alb:site?.alb??.1,wmax:site?.wmax??2,maint:site?site.maint:true,ri:radOf(lat,lon),rx:rxy[0],ry:rxy[1]};
+ if(haveCover&&k>=0)return{...base,open:b=>OPEN[k*16+b]/100,obs:b=>OBS[k*16+b]/100,horB:b=>HORB[k*16+b]/2,horT:b=>HORT[k*16+b]/2,sv:SVF[k]/100,tree:TRE[k]/255,
+  tf:site?(site.tf??0):(ROAD?clamp(ROAD[k]/255*2,0,1):.3),hw:(()=>{let m=0;for(let b=0;b<16;b++)m+=HORB[k*16+b]/2;return clamp(Math.tan(m/16*R),0,3)})()};
+ const s=site||{sea:null,shelter:.8,shade:.8};
+ return{...base,open:b=>s.sea&&inSec(b*22.5,s.sea)?.5:0,obs:b=>s.sea&&inSec(b*22.5,s.sea)?.05:1-s.shelter,horB:()=>(1-s.shade)*30,horT:()=>0,sv:s.shade,tree:0,tf:site?(site.tf??0):.3,hw:0}}
+function sunFrac(P,sn){if(sn.el<=0)return 0;const b=bin16(sn.az);return sig((sn.el-P.horB(b))/1.2)*(1-TOPAC*(1-sig((sn.el-P.horT(b))/1.2)))}
+/* ---- RoadSurf-based surface model (after Karsisto 2024, GMD 17:4837; MIT-licensed RoadSurf library) ---- */
+const DZ=[.03,.04,.06,.1,.15,.25,.4,.6],NL=8,LAM=[1.2,1.2,1.2,1.4,1.4,1.4,1.5,1.5],CAPV=[2e6,2e6,2e6,2.1e6,2.1e6,2.2e6,2.2e6,2.2e6],TDEEP=6.4,DTS=1200,SBC=5.67e-8,KV=.4;
+const KI=DZ.map((d,i)=>i<NL-1?2/(d/LAM[i]+DZ[i+1]/LAM[i+1]):2/(d/LAM[i])),CDZ=DZ.map((d,i)=>CAPV[i]*d);
+const LNM=Math.log(10.4/.4),LNH=Math.log(10.001/.001),LNT=Math.log(2.001/.001),SHF=[1,1,.8,.6,.4,.2,0,0];
+const TL=new Float64Array(NL),ta_=new Float64Array(NL),tb_=new Float64Array(NL),tc_=new Float64Array(NL),td_=new Float64Array(NL);
+const esW=t=>.61078*Math.exp(17.269*t/(t+237.3)),esI=t=>.61078*Math.exp(21.875*t/(t+265.5));
+const shareOf=W=>Math.exp(-W/.35);
+function diffuse(G){/* backward-Euler heat conduction, surface flux G into layer 0, fixed deep temperature */
+ for(let k=0;k<NL;k++){const up=k>0?KI[k-1]:0,dn=KI[k],c=CDZ[k]/DTS;ta_[k]=-up;tb_[k]=c+up+dn;tc_[k]=k<NL-1?-dn:0;td_[k]=c*TL[k]+(k===0?G:0)+(k===NL-1?dn*TDEEP:0)}
+ for(let k=1;k<NL;k++){const m=ta_[k]/tb_[k-1];tb_[k]-=m*tc_[k-1];td_[k]-=m*td_[k-1]}
+ TL[NL-1]=td_[NL-1]/tb_[NL-1];for(let k=NL-2;k>=0;k--)TL[k]=(td_[k]-tc_[k]*TL[k+1])/tb_[k]}
+function sim(lat,lon,P,F,out){
+ const nd=nudges(lat,lon);
+ {const t0=F.temperature_2m[H0];let z=0;for(let k=0;k<NL;k++){z+=DZ[k]/2;TL[k]=t0+(TDEEP-t0)*Math.min(1,z/1.6);z+=DZ[k]/2}}
+ let W=.1,S=(F.snow_depth[H0]||0)*100*.7*(P.maint?.1:.5),I=0,psh=0,psm=0;
+ for(let i=H0;i<=H1;i++){
+  const ta=F.temperature_2m[i],td=F.dew_point_2m[i],rh=clamp(100*esW(td)/esW(ta),5,100),cc=clamp(F.cloud_cover[i]/100,0,1),u0=F.wind_speed_10m[i],b=bin16(F.wind_direction_10m[i]),op=P.open(b);
+  const hw=P.hw||0,fc=1-(1-2/Math.PI*Math.exp(-hw/4))*clamp(hw/.5,0,1),u=Math.max(.5,u0*clamp(.75+.7*op-.6*P.obs(b),.2,1.35)*fc),sn=SUN[i],sf=sunFrac(P,sn);
+  const heat=ta<15?1:0,dayT=((new Date(T[i]*1000).getUTCHours()+2)%24),tfHeat=P.tf*(dayT>=7&&dayT<22?10:3);
+  const dir=F.direct_radiation?F.direct_radiation[i]:0,dif=F.diffuse_radiation?F.diffuse_radiation[i]:F.shortwave_radiation[i];
+  const taK=ta+273.15,eaH=esW(td)*10,ecl=1.24*Math.pow(eaH/taK,1/7),lwSky=(ecl*(1-.9*cc)+.9*cc)*SBC*taK**4;
+  let pr=F.precipitation[i]||0;const ra=RAD.get(i);
+  if(ra){const v=radS(ra,P.rx,P.ry)*gCorr,w=i<=nowIdx?1:i===nowIdx+1?.8:.5;pr=w*v+(1-w)*pr}
+  const prain=1/(1+Math.exp(22-2.7*ta-.2*rh)),fr=prain<.3?0:prain>.7?1:.5;
+  for(let st=0;st<3;st++){
+   const ts=TL[0],ca=1005+(taK-250)**2/3364,rho=100000/(287.05*taK);
+   const tac=ta+heat*.8*(1-P.sv),us=KV*u/(LNM+psm),blc=ca*rho*KV*us/(LNT+psh),H=blc*(tac-ts)+tfHeat;
+   let ro=(LNM+psm)*(LNH+psh)/(KV*KV*u);if(ro>30)ro=30;if(ro<3)ro=3;
+   const gam=.1*(.00063*taK+.47496),frozen=(S>0||I>0)&&ts<=0;
+   let LE=rho*ca/gam*((frozen?esI(ts):esW(ts))-rh/100*esW(ta))/ro;
+   const zeta=clamp(KV*2*9.81*H/(ca*rho*taK*us*us*us),-5,1);
+   if(zeta>0){psh=psm=4.7*zeta}else{psh=-2*Math.log((1+Math.sqrt(1-16*zeta))/2);psm=.6*psh}
+   /* water budget */
+   const p=pr*DTS/3600;if(p>0){W+=p*fr*(1-.2*P.tree);S+=p*(1-fr)}
+   if(LE>0){if(W<=0||S>0||I>0||ts<.25)LE=0;else{const ev=LE/2.5e6*DTS;if(ev>W){LE=W*2.5e6/DTS;W=0}else W-=ev}}
+   else if(LE<0){const c2=-LE*DTS;if(ts>=0)W+=c2/2.5e6;else I+=c2/2.83e6}
+   if(P.tf>0){const f=DTS/3600*P.tf;
+    if(W>=.1){const r=Math.max(.145*W,.06)*f*(W<.9?.5:1);W-=Math.min(W,r)}
+    if(S>0){const r=Math.min(S,Math.max(.45*S*(S<.2?3:1),.01)*f);S-=r;I+=.556*r}
+    if(I>0)I-=Math.min(I,Math.max(.319*I,.01)*f)}
+   if(P.maint&&S>.4){const r=Math.min(S,.5*DTS/3600);S-=r;W+=.15*r}
+   W=Math.min(W,P.wmax);S=Math.min(S,100);I=Math.min(I,50);
+   /* energy balance -> ground */
+   const twK=taK+heat*1.5+(dir>0?.004*dir:0),dirWall=sn.el>2?dir*Math.min(3,1/Math.tan(sn.el*R))*.35:0;
+   const alb=(S>.5||I>1.5)?.6:P.alb,swin=dir*sf+P.sv*dif+(1-P.sv)*.3*(dif+dirWall),lwin=P.sv*lwSky+(1-P.sv)*.9*SBC*twK**4;
+   const Rn=(1-alb)*swin+lwin-.95*SBC*(ts+273.15)**4;
+   diffuse(Rn-LE+H);
+   if((S>0||I>0)&&TL[0]>0){let m=TL[0]*CDZ[0]/334000;TL[0]=0;const a=Math.min(S,m);S-=a;m-=a;const c3=Math.min(I,m);I-=c3;m-=c3;W+=a+c3;if(m>0)TL[0]=m*334000/CDZ[0]}
+   if(TL[0]<0&&W>0){I+=W;W=0}}
+  if(i===nowIdx){if(nd.roadT!=null){const off=nd.roadT-TL[0];for(let k=0;k<NL;k++)TL[k]+=off*SHF[k];
+    if((S>0||I>0)&&TL[0]>0){let m=TL[0]*CDZ[0]*3/334000;const a=Math.min(S,m);S-=a;m-=a;const c3=Math.min(I,m);I-=c3;W+=a+c3}}
+   if(nd.sw>0){W=(W+nd.sW)/(1+nd.sw);S=(S+nd.sS)/(1+nd.sw);I=(I+nd.sI)/(1+nd.sw)}}
+  const ts=TL[0];let q=shareOf(W),c=q>=.85?'dry':q>=.5?'mostly':q>=.2?'damp':'wet';
+  if(S>.3){q=Math.min(q,.02);c='snow'}else if(I>.05){q=Math.min(q,.02);c='ice'}
+  if(i>nowIdx){const pp=(ra&&i<=nowIdx+1)?0:Math.max(F.precipitation_probability[i]||0,F.precipitation_probability[i-1]||0)/100;q*=1-.6*pp;q=.5+(q-.5)*(1-Math.min(.7,Math.min(.4,(i-nowIdx)/72)+(DIS?.5*DIS[i]:0)))}
+  out(i,q,W,S,ts,c,u,sf,pr,I)}}
+function simSite(s){const k=cellOf(s.lat,s.lon),P=profOf(k,s,s.lat,s.lon),F=forcing(s.lat,s.lon),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],F,P,k};
+ sim(s.lat,s.lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.S[i]=S;r.Ts[i]=ts;r.cls[i]=c;r.u[i]=u;r.sf[i]=sf;r.pr[i]=pr});return r}
+const masked=k=>haveCover&&(WAT[k]>140||BLD[k]>200||(pavedOnly&&ROAD&&IMP&&ROAD[k]+IMP[k]<30));
+async function runGrid(){
+ PG=new Uint8Array(N*NH);TG=new Int16Array(N*NH);WG=new Uint8Array(N*NH);SG=new Uint8Array(N*NH);SUNSH=new Uint8Array(N);
+ let t0=performance.now();const d0=Math.floor(nowIdx/24)*24;
+ for(let k=0;k<N;k++){
+  if(!(haveCover&&(WAT[k]>140||BLD[k]>200))){const j=Math.floor(k/NX),i=k-j*NX,lat=latOf(j),lon=lonOf(i);let ss=0,sn=0;
+   sim(lat,lon,profOf(k,null,lat,lon),blendF(lat,lon),(h,q,W,S,ts,c,u,sf,pr,I)=>{if(SUN[h].el>0&&h>nowIdx-24&&h<=nowIdx){ss+=sf;sn++}const x=h-DW0;if(x<0||x>=NH)return;const o=x*N+k;PG[o]=Math.round(q*255);TG[o]=Math.round(ts*10);WG[o]=Math.round(clamp(W*100,0,255));SG[o]=c==='snow'?1:c==='ice'?2:0});
+   SUNSH[k]=sn?Math.round(255*ss/sn):0}
+  if(performance.now()-t0>40){prog('Computing street-level map… '+Math.round(100*k/N)+'%');await sleep(0);t0=performance.now()}}
+ prog('')}
+async function recompute(){if(!OM||busy)return;busy=true;try{evidenceList();RES={};for(const s of SITES)RES[s.id]=simSite(s);renderSites();await runGrid();renderAll()}finally{busy=false}}
+
+/* ================= layers ================= */
+const TR=ramp([[0,'#2b4fbf'],[.4,'#8fb8e8'],[.5,'#f4f4f0'],[.6,'#f3b38a'],[1,'#c8322b']]);
+const LAYERS={dry:{r:RDRY},pt:{min:-8,max:8,u:'°C',r:TR},air:{min:-8,max:8,u:'°C',r:TR},
+ liveradar:{r:null},dew:{min:-3,max:6,u:'°C',r:ramp([[0,'#6b3fb0'],[.25,'#c7b5e6'],[.333,'#f2f2ee'],[1,'#e08a24']])},
+ film:{min:0,max:1.2,u:'mm',lo:'dry',hi:'standing water',r:ramp([[0,'#f3efe4'],[.04,'#d6e6f0'],[.083,'#9cc7e6'],[.29,'#4e8fdc'],[.6,'#1d4fc4'],[1,'#5b1d9e']])},
+ wind:{min:0,max:12,u:'m/s',r:ramp([[0,'#f4f1e8'],[.5,'#6cc3b5'],[1,'#0b5d63']])},
+ sun:{min:0,max:100,u:'%',r:ramp([[0,'#3b3f5c'],[.5,'#b9a77a'],[1,'#ffd34d']])},
+ rain:{min:0,max:3,u:'mm',r:ramp([[0,'#f4f1e8'],[.25,'#8ec5ea'],[1,'#173f9e']])},
+ radar:{min:0,max:3,u:'mm',r:ramp([[0,'#f4f1e8'],[.15,'#8ec5ea'],[.5,'#2f6fde'],[1,'#5b1d9e']])},
+ cover:{r:null},none:{r:null}};
+const hi=()=>clamp(nowIdx+ +$('slider').value,H0,H1);
+let curMap=v=>v;
+function cellVal(id,k,h){const x=h-DW0,o=x*N+k,j=Math.floor(k/NX),i=k-j*NX,lat=latOf(j),lon=lonOf(i);
+ switch(id){case'dry':return PG[o]/255;case'pt':return TG[o]/10;case'film':return WG[o]/100;case'sun':return SUNSH[k]/2.55;
+  case'air':return fBil('temperature_2m',lat,lon,h);case'dew':return TG[o]/10-fBil('dew_point_2m',lat,lon,h);
+  case'wind':{const F=COARSE[CI[k]],b=bin16(F.wind_direction_10m[h]),P=profOf(k,null,lat,lon);return F.wind_speed_10m[h]*clamp(.75+.7*P.open(b)-P.obs(b),.2,1.35)}
+  case'radar':{const a=RAD.get(h);if(!a)return NaN;const[x,y]=radXY(lat,lon);return radS(a,x,y)*gCorr}
+  case'rain':{let s=0;for(let q=h+1;q<=Math.min(T.length-1,h+3);q++)s+=fBil('precipitation',lat,lon,q);return s}}return 0}
+function renderMap(){
+ if(!PG)return;const h=hi(),L0=LAYERS[layerId],ctx=cv.getContext('2d'),im=ctx.createImageData(NX,NY),D=im.data;
+ let lo=0,hi2=1,str=false;
+ if(layerId==='dry'){lo=1;hi2=0;for(let k=0;k<N;k++){if(masked(k))continue;const v=PG[(h-DW0)*N+k]/255;if(v<lo)lo=v;if(v>hi2)hi2=v}
+  str=contrast==='auto'&&hi2-lo<.3&&hi2>lo;const sp=Math.max(.02,hi2-lo),mid=(lo+hi2)/2,w0=clamp(mid-.2,0,.6),w1=w0+.4;curMap=v=>str?w0+(w1-w0)*clamp((v-lo)/sp,0,1):v;
+  $('lgLo').textContent=str?Math.round(lo*100)+'%':'wet';$('lgHi').textContent=str?Math.round(hi2*100)+'%':'dry'}
+ else{curMap=v=>v;if(L0.r){$('lgLo').textContent=L0.lo||(L0.min+' '+L0.u);$('lgHi').textContent=L0.hi||(L0.max+' '+L0.u)}
+  else $('lgLo').textContent=layerId==='cover'?'grey = buildings (darker = taller) · green = trees · blue = water':'';if(!L0.r)$('lgHi').textContent='';
+  if(layerId==='radar'&&!RAD.has(h)){$('lgLo').textContent=radarNum?'no radar for this hour':'radar numbers unavailable';$('lgHi').textContent=''}}
+ $('lgBar').style.background=L0.r?L0.r.css:'none';$('lgBar').style.display=L0.r?'block':'none';$('contrast').style.display=layerId==='dry'?'':'none';
+ for(let k=0;k<N;k++){const o=k*4;
+  if(layerId==='cover'){if(!haveCover){D[o+3]=0;continue}const w=WAT[k]/255,b=BLD[k]/255,t=TRE[k]/255,g=clamp(1-BH50[k]/40,.15,1);
+   D[o]=Math.round(60*w+150*g*b+40*t);D[o+1]=Math.round(110*w+150*g*b+140*t);D[o+2]=Math.round(220*w+155*g*b+60*t);D[o+3]=Math.round(255*Math.min(1,w*.6+b+t));continue}
+  if(layerId==='none'||layerId==='liveradar'||masked(k)){D[o+3]=0;continue}
+  const v=cellVal(layerId,k,h);if(Number.isNaN(v)||(layerId==='radar'&&v<.02)){D[o+3]=0;continue}
+  const c=layerId==='dry'?RDRY(curMap(v)):L0.r((v-L0.min)/(L0.max-L0.min));D[o]=c[0];D[o+1]=c[1];D[o+2]=c[2];D[o+3]=255}
+ ctx.putImageData(im,0,0);const url=cv.toDataURL();
+ if(overlay)overlay.setUrl(url);else overlay=L.imageOverlay(url,[[BB.s,BB.w],[BB.n,BB.e]],{opacity:.62}).addTo(map);
+ siteLayer.clearLayers();
+ for(const s of SITES){const r=RES[s.id];if(!r)continue;const p=r.p[h];
+  L.circleMarker([s.lat,s.lon],{radius:11,color:'#fff',weight:3,fillColor:rgb(curMap(p)),fillOpacity:1}).addTo(siteLayer)
+   .bindTooltip(s.name+' '+Math.round(p*100)+'%',{permanent:true,direction:'right',className:'lbl',offset:[10,0]})}
+ $('when').textContent=+$('slider').value===0?'Now':fmtT(T[h]);
+ if(map.hasLayer(windLayer))drawWind();radarTime()}
+function drawWind(){
+ windLayer.clearLayers();if(!COARSE.length)return;const h=hi(),sz=map.getSize(),step=78;
+ for(let y=step/2;y<sz.y;y+=step)for(let x=step/2;x<sz.x;x+=step){const ll=map.containerPointToLatLng([x,y]);
+  const F=fAt(ll.lat,ll.lng),k=cellOf(ll.lat,ll.lng);if(k>=0&&haveCover&&BLD[k]>200)continue;
+  const wd=F.wind_direction_10m[h],b=bin16(wd),P=profOf(k,null,ll.lat,ll.lng),sp=F.wind_speed_10m[h]*(k>=0?clamp(.75+.7*P.open(b)-P.obs(b),.2,1.35):1);
+  const svg='<svg width="26" height="26" viewBox="-13 -13 26 26" style="transform:rotate('+(wd+180)+'deg)"><path d="M0 -11 L6 3 L1 1 L1 11 L-1 11 L-1 1 L-6 3 Z" fill="#163b5c" stroke="#fff" stroke-width="1.2"/></svg>';
+  L.marker(ll,{interactive:false,icon:L.divIcon({className:'',html:'<div class="wa">'+svg+sp.toFixed(1)+'</div>',iconSize:[30,40],iconAnchor:[15,13]})}).addTo(windLayer)}}
+function drawStations(){
+ stnLayer.clearLayers();stnLbl.clearLayers();
+ for(const s of ST){const c=s.cls?CLS[s.cls]:null;
+  L.marker([s.lat,s.lon],{icon:L.divIcon({className:'',html:'<div class="stn" style="background:'+(c?c.c:'#999')+'"></div>',iconSize:[12,12]})}).addTo(stnLayer)
+   .bindPopup('<b>'+esc(s.name)+'</b><br>'+esc(s.desc||'no surface sensor')+(s.roadT!=null?'<br>Road '+(+s.roadT).toFixed(1)+' °C':'')+(s.airT!=null?' · air '+(+s.airT).toFixed(1)+' °C':''));
+  const t=[s.roadT!=null?'road '+(+s.roadT).toFixed(1)+'°':'',s.airT!=null?'air '+(+s.airT).toFixed(1)+'°':'',c?c.lab:''].filter(Boolean).join(' · ');
+  if(t)L.marker([s.lat,s.lon],{interactive:false,icon:L.divIcon({className:'',html:'<span class="stl">'+esc(t)+'</span>',iconSize:[0,0]})}).addTo(stnLbl)}}
+function nextDry(r){for(let i=nowIdx;i<H1-1;i++)if(r.p[i]>=.85&&r.p[i+1]>=.85&&r.p[i+2]>=.85)return i===nowIdx?'Dry now, staying dry for 3+ h':'Mostly dry from '+fmtT(T[i]);return'Not fully dry within the forecast'}
+function whyText(s,r){const out=[];let i=nowIdx;while(i>H0&&!(r.pr[i]>.05))i--;
+ if(r.pr[i]>.05){let tot=0,j=i;while(j>H0&&r.pr[j]>.05){tot+=r.pr[j];j--}out.push('Last rain '+tot.toFixed(1)+' mm, ended '+(nowIdx-i===0?'this hour':(nowIdx-i)+' h ago')+(RAD.has(i)?' (radar)':' (forecast model)'))}else out.push('No rain in the last 2 days');
+ const near=EVL.map(n=>({n,d:km(s.lat,s.lon,n.lat,n.lon)})).filter(x=>x.d<2.5).sort((a,b)=>a.d-b.d).slice(0,2);
+ if(near.length)out.push('Nearby readings: '+near.map(x=>CLS[x.n.c].lab+' '+x.d.toFixed(1)+' km').join(', '));
+ if(r.cls[nowIdx]==='ice')out.push('water has frozen on the pavement');
+ if(DIS){for(let i=nowIdx+1;i<=Math.min(H1,nowIdx+24);i++)if(DIS[i]>.5){out.push('MET Nordic and FMI disagree on rain around '+fmtT(T[i]));break}}return out.join(' · ')}
+const WETL=[{lab:'None',c:'transparent'},{lab:'Damp patches',c:'#9cc7e6'},{lab:'Wet',c:'#4e8fdc'},{lab:'Very wet',c:'#1d4fc4'},{lab:'Standing water',c:'#5b1d9e'}];
+function wetLv(W,wmax){const pore=Math.max(.3,(wmax||2)-1);if(W<.01)return 0;if(W>=pore*.95)return 4;if(W>=.35)return 3;if(W>=.1)return 2;return 1}
+/* ---- report log for calibration ---- */
+let RLOG=[];try{RLOG=JSON.parse(localStorage.getItem('dryLog')||'[]')}catch(e){RLOG=[]}
+const REPSH={dry:1,mostly:.8,damp:.5,wet:.1,snow:0};
+const shCls=q=>q>=.85?'dry':q>=.5?'mostly':q>=.2?'damp':'wet';
+function logReport(cls,lat,lon,via,note){if(!OM)return;try{
+ const k=cellOf(lat,lon),P=profOf(k,null,lat,lon),F=forcing(lat,lon),r={p:[],W:[],Ts:[],pr:[],c:[]};
+ sim(lat,lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.Ts[i]=ts;r.pr[i]=pr;r.c[i]=c});
+ let lr=-1;for(let i=nowIdx;i>=H0;i--)if(r.pr[i]>.05){lr=nowIdx-i;break}let r24=0;for(let i=Math.max(H0,nowIdx-23);i<=nowIdx;i++)r24+=r.pr[i]||0;
+ const near=SITES.map(x=>[x.name,km(lat,lon,x.lat,x.lon)]).sort((a,b)=>a[1]-b[1])[0];
+ RLOG.push({t:new Date().toISOString().slice(0,16),lat:+lat.toFixed(5),lon:+lon.toFixed(5),spot:near&&near[1]<.3?near[0]:'',via,rep:cls,
+  mod:+r.p[nowIdx].toFixed(2),modCls:r.c[nowIdx],W:+r.W[nowIdx].toFixed(3),Ts:+r.Ts[nowIdx].toFixed(1),Ta:+F.temperature_2m[nowIdx].toFixed(1),Td:+F.dew_point_2m[nowIdx].toFixed(1),
+  ws:+F.wind_speed_10m[nowIdx].toFixed(1),svf:haveCover&&k>=0?SVF[k]:null,road:ROAD&&k>=0?ROAD[k]:null,lastRainH:lr,rain24:+r24.toFixed(2),radar:RAD.size>0,note:note?String(note).slice(0,120):undefined,v:'4.7'});
+ if(RLOG.length>1000)RLOG=RLOG.slice(-1000);ls.set('dryLog',JSON.stringify(RLOG));renderLog()}catch(e){}}
+function renderLog(){const L2=RLOG.filter(x=>REPSH[x.rep]!=null&&x.rep!=='snow');
+ const cats=['dry','mostly','damp','wet'],idx=c=>cats.indexOf(c);let ex=0,near1=0,bias=0;
+ for(const x of L2){const mc=shCls(x.mod);if(mc===x.rep)ex++;if(Math.abs(idx(mc)-idx(x.rep))<=1)near1++;bias+=x.mod-REPSH[x.rep]}
+ const n=L2.length;$('logSum').innerHTML=[['Reports',String(RLOG.length)],['Model matched you',n?Math.round(100*ex/n)+' %':'–'],['Within one step',n?Math.round(100*near1/n)+' %':'–'],
+  ['Model tends to be',n?(Math.abs(bias/n)<.08?'about right':bias>0?'too dry by '+Math.round(100*bias/n)+' pts':'too wet by '+Math.round(-100*bias/n)+' pts'):'–']].map(([k,v])=>'<div>'+k+'<b>'+v+'</b></div>').join('');
+ $('logRows').innerHTML=RLOG.slice(-12).reverse().map(x=>'<tr><td>'+esc(new Date(x.t+'Z').toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Helsinki'}))+'</td><td>'+esc((x.spot||(x.lat+', '+x.lon))+(x.note?' – '+x.note:''))+'</td><td>'+esc((CLS[x.rep]||{}).lab||x.rep)+'</td><td>'+esc((CLS[shCls(x.mod)]||{}).lab)+'</td><td class="n">'+Math.round(x.mod*100)+' %</td></tr>').join('')}
+function avgRes(){const inc=SITES.filter(s=>RES[s.id]&&!AVGEX.includes(s.id));if(!inc.length)return null;
+ const r={p:[],W:[],Ts:[],n:inc.length,names:inc.map(s=>s.name),wmax:inc.reduce((a,s)=>a+RES[s.id].P.wmax,0)/inc.length};for(let i=H0;i<=H1;i++){let p=0,w=0,t=0;for(const s of inc){const q=RES[s.id];p+=q.p[i];w+=q.W[i];t+=q.Ts[i]}r.p[i]=p/inc.length;r.W[i]=w/inc.length;r.Ts[i]=t/inc.length}return r}
+function renderSites(){
+ const h=hi(),a=Math.max(H0,nowIdx-12),b=Math.min(H1,nowIdx+36),av=avgRes();
+ const strip=r=>{let bars='',wb='';for(let i=a;i<=b;i++){bars+='<span style="height:'+Math.max(4,r.p[i]*100)+'%;background:'+rgb(r.p[i])+(i===h?';outline:2px solid var(--ink)':'')+'"></span>';wb+='<span style="height:100%;background:'+WETL[wetLv(r.W[i],r.wmax)].c+'"></span>'}return'<div class="strip">'+bars+'<i class="now" style="left:'+((nowIdx-a)/(b-a+1)*100).toFixed(1)+'%"></i></div><div class="strip" style="height:7px;margin-top:2px" title="How wet the wet parts are">'+wb+'</div><div class="axis"><span>−12 h</span><span>now</span><span>+36 h</span></div>'};
+ const wetTxt=(W,wm)=>{const l=wetLv(W,wm);return l?'Wet parts: <b style="color:'+WETL[l].c+'">'+WETL[l].lab+'</b> ('+W.toFixed(2)+' mm)':'No water on the surface'};
+ const avgCard=av?'<article class="card site" style="border:2px solid var(--dry);grid-column:1/-1"><div class="top"><div><h2 style="margin:0">Your spots on average</h2><p class="meta" style="margin:2px 0 0">'+av.n+' spot'+(av.n>1?'s':'')+': '+esc(av.names.join(', '))+'</p></div><div class="pct" style="color:'+rgb(av.p[h])+'">'+Math.round(av.p[h]*100)+'%</div></div>'
+  +'<p class="meta">Average share of surface dry · '+wetTxt(av.W[h],av.wmax)+' · pavement '+av.Ts[h].toFixed(1)+' °C</p><p style="margin:0;font-weight:600">'+nextDry(av)+'</p>'+strip(av)+'</article>'
+  :'<article class="card site" style="grid-column:1/-1"><p class="meta" style="margin:0">Tick “Include in average” on at least one spot to see the average.</p></article>';
+ $('sites').innerHTML=avgCard+SITES.map(s=>{const r=RES[s.id];if(!r)return'';const p=r.p[h],c=CLS[r.cls[h]];
+  let rr='';if(RAD.size){let s24=0;for(let i=nowIdx-23;i<=nowIdx;i++){const a2=RAD.get(i);if(a2)s24+=radS(a2,r.P.rx,r.P.ry)*gCorr}rr=' · radar rain 24 h '+s24.toFixed(1)+' mm'}
+  const cov=haveCover&&r.k>=0?' · open sky '+SVF[r.k]+'%'+(SUN[h].el>0?' · sun now '+Math.round(r.sf[h]*100)+'%':''):'';
+  return'<article class="card site"><div class="top"><div><h2 style="margin:0">'+esc(s.name)+'</h2><span class="state" style="background:'+c.c+'">'+c.lab+'</span></div><div class="pct" style="color:'+rgb(p)+'">'+Math.round(p*100)+'%</div></div>'
+  +'<p class="meta" style="color:var(--ink)">'+(r.cls[h]==='snow'||r.cls[h]==='ice'?'Surface: <b>'+c.lab+'</b>':wetTxt(r.W[h],r.P.wmax))+'</p>'
+  +'<p class="meta">Pavement '+r.Ts[h].toFixed(1)+' °C · local wind '+r.u[h].toFixed(1)+' m/s'+cov+rr+(r.S[h]>.05?' · snow '+r.S[h].toFixed(1)+' mm':'')+'</p>'
+  +'<p class="meta" style="margin-top:0">'+esc(whyText(s,r))+'</p>'
+  +'<p style="margin:0;font-weight:600">'+nextDry(r)+'</p>'
+  +strip({p:r.p,W:r.W,wmax:r.P.wmax})
+  +'<label class="chk"><input type="checkbox" data-avg="'+s.id+'"'+(AVGEX.includes(s.id)?'':' checked')+'> Include in average</label>'
+  +'<div class="btns"><button data-mv="'+s.id+'">'+(moveId===s.id?'Tap the map…':'Move on map')+'</button><button data-rm="'+s.id+'">Remove</button></div></article>'}).join('')}
+$('sites').addEventListener('change',e=>{const c=e.target.closest('input[data-avg]');if(!c)return;const id=c.dataset.avg;AVGEX=AVGEX.filter(x=>x!==id);if(!c.checked)AVGEX.push(id);ls.set('dryAvgEx',JSON.stringify(AVGEX));renderSites();renderAll()});
+function chips(){$('src').innerHTML=Object.entries(src).map(([k,v])=>'<span class="chip '+(v===true?'ok':v==='…'?'wait':'bad')+'">'+esc(k)+(v===true?' ✓':v==='…'?' …':' ✗ '+esc(v))+'</span>').join('')}
+function renderCond(){
+ const s0=SITES.find(q=>RES[q.id]),F=s0?RES[s0.id].F:forcing(CEN[0],CEN[1]),i=nowIdx,ref=s0||{lat:CEN[0],lon:CEN[1]},stn=STNS.filter(st=>st.data[T[i]]||st.data[T[i]-3600]).sort((a,b)=>km(a.lat,a.lon,ref.lat,ref.lon)-km(b.lat,b.lon,ref.lat,ref.lon))[0],o=stn?(stn.data[T[i]]||stn.data[T[i]-3600]):(FMI[T[i]]||FMI[T[i]-3600]||{});let r24=0;for(let k=Math.max(0,i-23);k<=i;k++)r24+=F.precipitation[k];
+ const wd=F.wind_direction_10m[i],dirs=['N','NE','E','SE','S','SW','W','NW'][Math.round(wd/45)%8],sn=SUN[i];
+ const it=[[stn?'Air ('+stn.name+')':'Air',(isFinite(o.t2m)?o.t2m:F.temperature_2m[i]).toFixed(1)+' °C'],['Dew point',F.dew_point_2m[i].toFixed(1)+' °C'],['Humidity',Math.round(isFinite(o.rh)?o.rh:F.relative_humidity_2m[i])+' %'],
+  ['Wind',(isFinite(o.ws_10min)?o.ws_10min:F.wind_speed_10m[i]).toFixed(1)+' m/s '+dirs],
+  radarNum?['Radar now (max in area)',radarMax<.05?'no rain':radarMax.toFixed(1)+' mm/h']:['Rain, last 24 h (model)',r24.toFixed(1)+' mm'],
+  ...(radK?[[radK.n>1?'Rain 24 h, avg of '+radK.n+' FMI gauges: radar / gauge':'Kumpula 24 h: radar / gauge',radK.rs.toFixed(1)+' / '+radK.gs.toFixed(1)+' mm']]:[]),
+  ['Snow depth',(isFinite(o.snow_aws)&&o.snow_aws>=0?o.snow_aws:F.snow_depth[i]*100).toFixed(0)+' cm'],
+  ['Sun height',Math.max(0,sn.el).toFixed(0)+'°'],['Rain chance, next 6 h',Math.round(Math.max(0,...Array.from(F.precipitation_probability.slice(i+1,i+7))))+' %']];
+ $('cond').innerHTML=it.map(([k,v])=>'<div>'+k+'<b>'+v+'</b></div>').join('');chips();
+ $('stn').innerHTML=ST.map(s=>{const c=s.cls?CLS[s.cls]:null;return'<tr><td>'+esc(s.name)+'</td><td>'+(c?'<span class="state" style="background:'+c.c+';margin:0">'+c.lab+'</span>':'–')+'</td><td class="n">'+(s.roadT!=null?(+s.roadT).toFixed(1):'–')+'</td><td class="n">'+(s.airT!=null?(+s.airT).toFixed(1):'–')+'</td><td class="n">'+s.d.toFixed(1)+'</td></tr>'}).join('')}
+function renderAll(){drawUser();renderMap();renderSites();renderCond();renderCams();
+ const best=SITES.filter(s=>RES[s.id]).map(s=>[s,RES[s.id].p[nowIdx]]).sort((a,b)=>b[1]-a[1]);if(!best.length){$('headline').textContent='Add a spot to see its forecast.';return}
+ {const av=avgRes();$('headline').innerHTML=(av?'Your spots on average: <b>'+Math.round(av.p[nowIdx]*100)+'% dry</b> · ':'')+'Best right now: <b>'+esc(best[0][0].name)+' '+Math.round(best[0][1]*100)+'%</b> · worst: '+esc(best[best.length-1][0].name)+' '+Math.round(best[best.length-1][1]*100)+'%'+(radarNum&&radarMax>=.1?' · <b>raining on radar</b>':'')}}
+
+/* ================= cameras ================= */
+const camURL=c=>'https://weathercam.digitraffic.fi/'+c.presets[c.pi]+'.jpg';
+function shoreScore(c){const k=cellOf(c.lat,c.lon);if(k<0||!haveCover)return 0;const j=Math.floor(k/NX),i=k-j*NX;let s=0,n=0;
+ for(let dj=-6;dj<=6;dj+=2)for(let di=-6;di<=6;di+=2){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=NX||jj>=NY)continue;s+=WAT[jj*NX+ii];n++}return s/n/255}
+function orderCams(){for(const c of CAMS){c.d=Math.min(...SITES.map(s=>km(s.lat,s.lon,c.lat,c.lon)));c.shore=shoreScore(c);c.rank=c.d-4*c.shore}CAMS.sort((a,b)=>a.rank-b.rank)}
+function nearestSensor(c){return ST.filter(s=>s.cls).map(s=>({s,d:km(c.lat,c.lon,s.lat,s.lon)})).filter(x=>x.d<1.5).sort((a,b)=>a.d-b.d)[0]}
+const cname=c=>String(c.name||c.id).replace(/_/g,' ');
+function camCards(){const now=Date.now(),list=camShowAll?CAMS:CAMS.slice(0,16);
+ $('moreCams').style.display=CAMS.length>16&&!camShowAll?'':'none';$('moreCams').textContent='Show all '+CAMS.length+' cameras';
+ $('cams').innerHTML=list.map(c=>{const k=CAMS.indexOf(c);
+  return'<article class="card cam" id="cam'+k+'"><img crossorigin="anonymous" data-k="'+k+'" alt="Road camera '+esc(cname(c))+'" src="'+esc(camURL(c))+'?t='+Math.floor(now/6e5)+'">'
+  +'<p style="margin:8px 0 0;font-weight:600">'+esc(cname(c))+' <span class="small">'+c.d.toFixed(1)+' km from nearest spot'+(c.shore>.15?' · shore':'')+(c.presets.length>1?' · view '+(c.pi+1)+'/'+c.presets.length:'')+'</span></p>'
+  +'<p class="small" id="ci'+k+'" style="margin:2px 0"></p><div class="btns" id="cb'+k+'"></div></article>'}).join('');
+ list.forEach(c=>camStatus(CAMS.indexOf(c)));
+ $('cams').querySelectorAll('img').forEach(img=>{img.onload=()=>analyze(img);img.onerror=()=>{if(img.dataset.r)return;img.dataset.r=1;img.removeAttribute('crossorigin');img.src=img.src+'&nc=1';CAMS[+img.dataset.k].blocked=true;camStatus(+img.dataset.k)}})}
+function camStatus(k){const c=CAMS[k],el=$('ci'+k),bt=$('cb'+k);if(!el)return;const now=Date.now(),e=EV[c.id]&&now-EV[c.id].t<3*3600e3?EV[c.id]:null,a=EVA[c.id],ns=nearestSensor(c);
+ const parts=[];if(ns)parts.push('Sensor '+ns.d.toFixed(1)+' km away: '+CLS[ns.s.cls].lab);
+ if(a)parts.push('Auto: '+CLS[a.cls].lab+' ('+Math.round(a.conf*100)+'% sure)');else if(c.note)parts.push(c.note);else if(c.blocked)parts.push('Camera server blocks pixel access, so no auto analysis');
+ if(e)parts.push('Reading: '+CLS[e.cls].lab+' ('+(e.src==='you'?'you':'Claude')+(e.note?': '+e.note:'')+')');
+ el.textContent=parts.join(' · ');
+ bt.innerHTML=['dry','damp','wet','snow'].map(x=>'<button data-k="'+k+'" data-m="'+x+'"'+(e&&e.cls===x?' class="on"':'')+'>'+CLS[x].lab+'</button>').join('')
+  +(c.presets.length>1?'<button data-k="'+k+'" data-v="1">Next view</button>':'')+'<button data-k="'+k+'" data-a="1">Ask Claude</button>'+(e?'<button data-k="'+k+'" data-x="1">Clear</button>':'')}
+function renderCams(){camLayer.clearLayers();const now=Date.now();
+ for(const c of CAMS){const k=CAMS.indexOf(c),e=EV[c.id]&&now-EV[c.id].t<3*3600e3?EV[c.id]:EVA[c.id];
+  L.marker([c.lat,c.lon],{icon:L.divIcon({className:'',html:'<div class="camic" style="background:'+(e?CLS[e.cls].c:'#23282d')+'"></div>',iconSize:[16,16]})}).addTo(camLayer)
+   .bindTooltip(cname(c)+(e?': '+CLS[e.cls].lab:'')).on('click',()=>{if(!$('cam'+k)){camShowAll=true;camCards()}$('cam'+k)?.scrollIntoView({behavior:'smooth'})})}
+ for(const x of EXT){const e=EV[x.id];L.marker([x.lat,x.lon],{icon:L.divIcon({className:'',html:'<div class="camic" style="border-style:dashed;background:'+(e&&now-e.t<3*3600e3?CLS[e.cls].c:'#555')+'"></div>',iconSize:[16,16]})}).addTo(camLayer).bindTooltip(x.name)}
+ CAMS.forEach((c,k)=>camStatus(k));extCards()}
+function extCards(){const now=Date.now();$('ext').innerHTML=EXT.map((x,k)=>{const e=EV[x.id]&&now-EV[x.id].t<3*3600e3?EV[x.id]:null;
+ return'<article class="card cam"><p style="margin:0;font-weight:600"><a href="'+x.url+'" target="_blank" rel="noopener">'+esc(x.name)+' ↗</a></p><p class="small" style="margin:2px 0">'+(e?'Your reading: '+CLS[e.cls].lab:'No reading')+'</p><div class="btns">'
+ +['dry','damp','wet','snow'].map(m=>'<button data-e="'+k+'" data-m="'+m+'"'+(e&&e.cls===m?' class="on"':'')+'>'+CLS[m].lab+'</button>').join('')+(e?'<button data-e="'+k+'" data-x="1">Clear</button>':'')+'</div></article>'}).join('')}
+function features(img){const W=192,H=144,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,W,H);
+ const d=x.getImageData(0,0,W,H).data,lum=new Float32Array(W*H),sat=new Float32Array(W*H);let all=0;
+ for(let p=0;p<W*H;p++){const r=d[p*4]/255,g=d[p*4+1]/255,b=d[p*4+2]/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b);lum[p]=.3*r+.59*g+.11*b;sat[p]=mx>0?(mx-mn)/mx:0;all+=lum[p]}
+ all/=W*H;const y0=Math.floor(H*.55),x0=Math.floor(W*.15),x1=Math.floor(W*.85);let rl=0,n=0,tl=0,tn=0,spec=0,white=0,rs=0;
+ for(let y=0;y<y0;y++)for(let i=0;i<W;i++){tl+=lum[y*W+i];tn++}
+ for(let y=y0;y<H-4;y++)for(let i=x0;i<x1;i++){const p=y*W+i;rl+=lum[p];rs+=sat[p];n++;if(lum[p]>.78)spec++;if(lum[p]>.68&&sat[p]<.1)white++}
+ rl/=n;rs/=n;tl/=tn;spec/=n;white/=n;
+ let streak=0;for(let i=x0;i<x1;i++){let run=0,best=0;for(let y=y0;y<H-4;y++){if(lum[y*W+i]>rl+.22){run++;if(run>best)best=run}else run=0}if(best>=6)streak++}
+ streak/=(x1-x0);return{all,rel:rl/Math.max(.05,tl),spec,white,streak,sat:rs}}
+function zWet(f){const night=f.all<.16;return night?-.6+10*f.streak+6*f.spec:3*(.62-f.rel)+10*f.spec+6*f.streak-2*(f.sat-.12)}
+function analyze(img){const k=+img.dataset.k,c=CAMS[k];if(!c)return;
+ try{const f=features(img);c.f=f;c.note='';if(f.all<.05){c.note='Too dark to analyse';c.f=null}}catch(e){c.blocked=true;c.f=null}schedClassify()}
+let clsT=null;function schedClassify(){clearTimeout(clsT);clsT=setTimeout(classifyCams,1500)}
+function classifyCams(){
+ const pairs=[];for(const c of CAMS){if(!c.f)continue;const ns=nearestSensor(c);if(ns&&['dry','damp','wet'].includes(ns.s.cls))pairs.push({c,t:{dry:-2,damp:0,wet:2}[ns.s.cls]})}
+ calN=pairs.length;calOff=pairs.length>=2?clamp(pairs.reduce((a,p)=>a+(p.t-zWet(p.c.f)),0)/pairs.length,-2.5,2.5):0;
+ const old=JSON.stringify(EVA);EVA={};
+ for(const c of CAMS){if(!c.f)continue;const f=c.f;let cls,conf;
+  if(f.all>=.16&&f.white>.35){cls='snow';conf=.55}else{const pw=sig(zWet(f)+calOff);cls=pw>.65?'wet':pw>.4?'damp':'dry';conf=clamp(Math.abs(pw-.5)*1.6,.15,.6)}
+  EVA[c.id]={cls,conf,src:'auto'}}
+ if(JSON.stringify(EVA)!==old){renderCams();recompute()}}
+async function askClaude(k){
+ const key=ls.get('dryKey'),c=CAMS[k];if(!key){document.querySelector('details').open=true;$('key').focus();return}
+ const el=$('ci'+k);if(el)el.textContent='Asking Claude…';
+ try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+  body:JSON.stringify({model:ls.get('dryModel')||'claude-haiku-5-5',max_tokens:200,messages:[{role:'user',content:[{type:'image',source:{type:'url',url:camURL(c)}},
+   {type:'text',text:'This is a Finnish road weather camera image ('+c.name+'). Judge the condition of the visible asphalt for inline skating. Wet: dark asphalt, glare, light reflections, spray, puddles. Dry: light grey matte asphalt. Reply with ONLY JSON: {"surface":"dry"|"damp"|"wet"|"snow"|"unknown","confidence":0-1,"note":"max 8 words"}'}]}]})});
+  const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);
+  const o=JSON.parse((j.content?.[0]?.text||'').match(/\{[\s\S]*\}/)[0]);if(o.surface==='ice')o.surface='snow';
+  if(!CLS[o.surface]){if(el)el.textContent='Claude: can\'t tell ('+(o.note||'')+')';return}
+  EV[c.id]={cls:o.surface,src:'claude',conf:clamp(+o.confidence||.6,.2,1),note:String(o.note||'').slice(0,60),t:Date.now()};saveEV();return true
+ }catch(e){if(el)el.textContent='Claude call failed: '+e.message}}
+function saveEV(){ls.set('dryEV',JSON.stringify(EV))}
+
+/* ================= self-test ================= */
+let testRows=[];
+const PROBES=[
+ ['Open-Meteo forecast',async()=>{const j=await getJSON('https://api.open-meteo.com/v1/forecast?latitude=60.17&longitude=24.94&hourly=temperature_2m&forecast_days=1');return(j.hourly?.time?.length||0)+' hours'}],
+ ['MET Norway forecast',async()=>{const j=await getJSON('https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=60.17&lon=24.94');return(j.properties?.timeseries?.length||0)+' steps'}],
+ ['FMI Kumpula observations',async()=>{const r=await fetch(fmiURL(3));if(!r.ok)throw new Error('HTTP '+r.status);const t=await r.text();return(t.match(/BsWfsElement/g)||[]).length/2+' values'}],
+ ['FMI stations around Helsinki',async()=>{const e=new Date(),iso=d=>d.toISOString().slice(0,19)+'Z';const r=await fetch(FMIQ+'fmi::observations::weather::simple&bbox=24.70,60.05,25.30,60.34&parameters=t2m&timestep=60&starttime='+iso(new Date(e-3600e3))+'&endtime='+iso(e));
+  if(!r.ok)throw new Error('HTTP '+r.status);const rows=parseBs(await r.text());return new Set(rows.map(q=>q.lat+','+q.lon)).size+' stations'}],
+ ['FMI Harmonie forecast',async()=>{const r=await fetch(FMIQ+'fmi::forecast::harmonie::surface::point::simple&latlon=60.18,24.97&timestep=60&parameters=Temperature');if(!r.ok)throw new Error('HTTP '+r.status);return parseBs(await r.text()).length+' hours'}],
+ ['Open-Meteo MET Nordic',async()=>{const j=await getJSON('https://api.open-meteo.com/v1/forecast?latitude=60.17&longitude=24.94&hourly=temperature_2m,direct_radiation&forecast_days=1&models=metno_seamless');return(j.hourly?.time?.length||0)+' hours'}],
+ ['FMI radar, numbers',async()=>{const t=slotNow(),a=await radarFrame(t);let m=0,w=0;for(const v of a){if(v>m)m=v;if(v>.05)w++}return'readable; '+w+' rainy patches, max '+m.toFixed(1)+' mm/h at '+fmtT(t)}],
+ ['FMI radar, map display',()=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok('image loads');i.onerror=()=>no(new Error('image failed'));i.src=FMIW+'?'+new URLSearchParams(wmsQ(RLAY,BB,64,48,{TIME:isoT(slotNow())}))})],
+ ['Fintraffic road sensors',async()=>{const j=await getJSON('https://tie.digitraffic.fi/api/weather/v1/stations');return j.features.length+' stations'}],
+ ['Fintraffic camera pixels',async()=>{const j=await getJSON('https://tie.digitraffic.fi/api/weathercam/v1/stations');const c=j.features.find(f=>(f.properties.presets||[]).length);
+  return await new Promise((ok,no)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>{try{const cv2=document.createElement('canvas');cv2.width=4;cv2.height=4;const x=cv2.getContext('2d');x.drawImage(i,0,0,4,4);x.getImageData(0,0,1,1);ok('readable, auto analysis works')}catch(e){no(new Error('image shows but pixels locked'))}};i.onerror=()=>no(new Error('pixel access refused (image still displays)'));i.src='https://weathercam.digitraffic.fi/'+c.properties.presets[0].id+'.jpg?t='+Date.now()})}],
+ ['HSY tree heights',async()=>{const a=await hsyCov(hsyL(2024).tree[1],{s:60.168,n:60.175,w:24.93,e:24.945},64,48);let c=0;for(const v of a)c+=v;return'readable; '+Math.round(100*c/a.length)+'% tree cover in test area'}],
+ ['HSY buildings',async()=>{const a=await hsyCov(hsyL(2024).bld,{s:60.168,n:60.175,w:24.93,e:24.945},64,48);let c=0;for(const v of a)c+=v;return'readable; '+Math.round(100*c/a.length)+'% building cover in test area'}],
+ ['Helsinki building storeys',async()=>{const j=await getJSON(HELW+'?service=WFS&version=2.0.0&request=GetFeature&typeNames=avoindata:Rakennukset_piste_rekisteritiedot&propertyName=i_kerrlkm,geom&outputFormat=application/json&srsName=EPSG:4326&count=20&bbox=24.935,60.17,24.94,60.173,EPSG:4326');
+  const f=j.features||[];return f.length+' buildings, storeys e.g. '+f.slice(0,4).map(x=>x.properties.i_kerrlkm).join(', ')}],
+ ['Helsinki map layers (water, trees)',async()=>{const bb={s:60.168,n:60.175,w:24.93,e:24.945},a=await helCov('avoindata:Maavesi_merialue','poly',bb,64,48),t=await helCov('avoindata:Puurekisteri_piste','point',bb,64,48);let c=0,d=0;for(const v of a)c+=v;for(const v of t)d+=v;return'readable; sea '+Math.round(100*c/a.length)+'%, tree points '+Math.round(100*d/t.length)+'% in test area'}],
+ ['OpenStreetMap (Overpass)',async()=>{const j=await overpass('[out:json][timeout:20];way["building"](60.172,24.937,60.173,24.939);out ids 5;');return(j.elements||[]).length+' buildings'}]];
+async function runTests(){
+ const tb=$('testOut').tBodies[0];testRows=PROBES.map(([n])=>[n,'…','','']);
+ const draw=()=>{tb.innerHTML=testRows.map(r=>'<tr><td>'+esc(r[0])+'</td><td class="'+(r[1]==='✓'?'ok':r[1]==='✗'?'bad':'')+'">'+r[1]+'</td><td>'+esc(r[2])+'</td><td class="n">'+esc(r[3])+'</td></tr>').join('')};draw();
+ await Promise.all(PROBES.map(async([n,f],i)=>{const t=performance.now();try{const d=await f();testRows[i]=[n,'✓',d,Math.round(performance.now()-t)+' ms']}catch(e){testRows[i]=[n,'✗',why(e),Math.round(performance.now()-t)+' ms']}draw()}))}
+
+/* ================= events ================= */
+$('cams').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const k=+b.dataset.k,c=CAMS[k];
+ if(b.dataset.m){logReport(b.dataset.m,c.lat,c.lon,'camera '+c.name);EV[c.id]={cls:b.dataset.m,src:'you',conf:1,t:Date.now()};saveEV();renderCams();recompute()}
+ else if(b.dataset.x){delete EV[c.id];saveEV();renderCams();recompute()}
+ else if(b.dataset.v){c.pi=(c.pi+1)%c.presets.length;delete EVA[c.id];c.f=null;camCards()}
+ else if(b.dataset.a){if(await askClaude(k)){renderCams();recompute()}}});
+$('ext').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const x=EXT[+b.dataset.e];
+ if(b.dataset.m)EV[x.id]={cls:b.dataset.m,src:'you',conf:1,t:Date.now()};else delete EV[x.id];saveEV();renderCams();recompute()});
+function saveSpots(){ls.set('drySpots',JSON.stringify(SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind})=>({id,name,lat,lon,kind}))));ls.set('dryHidden',JSON.stringify(HIDDEN))}
+let addMode=false;
+$('addSpot').addEventListener('click',()=>{addMode=!addMode;moveId=null;const p=$('prog');if(addMode){p.className='move';p.textContent='Tap the map where your new spot is.';map.getContainer().scrollIntoView({behavior:'smooth'})}else{p.className='';p.textContent=''}});
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-newspot]');if(!b)return;const f=b.closest('div.newspot'),nm=(f.querySelector('input').value||'').trim().slice(0,40)||'My spot',kind=f.querySelector('select').value;
+ const s={id:'c'+Date.now(),name:nm,lat:+b.dataset.lat,lon:+b.dataset.lon,kind,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:2,sea:null,shelter:.8,shade:.8};
+ SITES.push(s);saveSpots();map.closePopup();if(OM){RES[s.id]=simSite(s);renderSites();renderMap();renderAll()}});
+$('sites').addEventListener('click',e=>{const rm=e.target.closest('button[data-rm]');if(rm){const i=SITES.findIndex(x=>x.id===rm.dataset.rm);if(i<0)return;const s=SITES[i];SITES.splice(i,1);if(!s.custom)HIDDEN.push(s.id);delete RES[s.id];saveSpots();ls.set('dryPos4',JSON.stringify(Object.fromEntries(SITES.map(x=>[x.id,[x.lat,x.lon]]))));renderSites();renderMap();renderAll();return}
+ const b=e.target.closest('button[data-mv]');if(!b)return;moveId=moveId===b.dataset.mv?null:b.dataset.mv;
+ const p=$('prog');if(moveId){p.className='move';p.textContent='Tap the map where '+SITES.find(s=>s.id===moveId).name+' is.';map.getContainer().scrollIntoView({behavior:'smooth'})}else{p.className='';p.textContent=''}renderSites()});
+function savePos(){ls.set('dryPos4',JSON.stringify(Object.fromEntries(SITES.map(s=>[s.id,[s.lat,s.lon]]))))}
+function resim(){if(!OM)return;evidenceList();for(const s of SITES)RES[s.id]=simSite(s);renderSites();renderMap();renderAll()}
+$('resetPos').addEventListener('click',()=>{HIDDEN=[];saveSpots();ls.del('dryPos4');const cust=SITES.filter(s=>s.custom);SITES.length=0;
+ for(const id of Object.keys(DEFPOS)){const d=DEFSPOTS.find(x=>x.id===id);SITES.push({...d,lat:DEFPOS[id][0],lon:DEFPOS[id][1]})}SITES.push(...cust);resim()});
+$('moreCams').addEventListener('click',()=>{camShowAll=true;camCards()});
+$('slider').addEventListener('input',()=>{renderMap();renderSites()});
+$('nowBtn').addEventListener('click',()=>{$('slider').value=0;renderMap();renderSites()});
+$('refresh').addEventListener('click',()=>load());
+$('layer').value=layerId;$('layer').addEventListener('change',()=>{const was=layerId;layerId=$('layer').value;ls.set('dryLayer',layerId);if(was==='liveradar'&&layerId!=='liveradar'&&map.hasLayer(radarLayer))map.removeLayer(radarLayer);renderMap()});
+$('paved').checked=pavedOnly;$('paved').addEventListener('click',()=>{if(haveCover&&!IMP)prog('Paved-only needs HSY land cover, which this browser can\'t load.')});$('paved').addEventListener('change',()=>{pavedOnly=$('paved').checked;ls.set('dryPaved',pavedOnly?'1':'0');renderMap()});
+$('contrast').textContent='Contrast: '+contrast;
+$('contrast').addEventListener('click',()=>{contrast=contrast==='auto'?'absolute':'auto';ls.set('dryContrast',contrast);$('contrast').textContent='Contrast: '+contrast;renderMap()});
+$('key').value=ls.get('dryKey')||'';$('model').value=ls.get('dryModel')||'claude-haiku-5-5';$('autoClaude').checked=ls.get('dryAutoClaude')==='1';
+$('autoClaude').addEventListener('change',()=>ls.set('dryAutoClaude',$('autoClaude').checked?'1':'0'));
+$('saveKey').addEventListener('click',()=>{ls.set('dryKey',$('key').value.trim());ls.set('dryModel',$('model').value.trim());$('saveKey').textContent='Saved'});
+async function claudeAll(){const list=camShowAll?CAMS:CAMS.slice(0,16);let any=false;for(const c of list)if(await askClaude(CAMS.indexOf(c)))any=true;if(any){renderCams();recompute()}}
+$('askAll').addEventListener('click',claudeAll);
+$('testBtn').addEventListener('click',runTests);
+function parseCoord(t){t=String(t||'').trim();let m=t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||t.match(/[?&](?:q|query|ll|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i);if(m)return[+m[1],+m[2]];
+ const dms=[...t.matchAll(/(\d+)\s*[°º]\s*(\d+)\s*['′]\s*([\d.]+)\s*["″]?\s*([NSEW])/gi)];
+ if(dms.length>=2){const v=dms.slice(0,2).map(d=>{let x=+d[1]+(+d[2])/60+(+d[3])/3600;if(/[SW]/i.test(d[4]))x=-x;return[x,d[4].toUpperCase()]}),la=v.find(x=>/[NS]/.test(x[1])),lo=v.find(x=>/[EW]/.test(x[1]));if(la&&lo)return[la[0],lo[0]]}
+ m=t.match(/(-?\d{1,2}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)/);if(m)return[+m[1],+m[2]];return null}
+let gpsMark=null;
+function gpsTarget(){const c=parseCoord($('gpsIn').value);if(!c||Math.abs(c[0])>90||Math.abs(c[1])>180){$('gpsMsg').textContent='Couldn\'t read coordinates. Try 60.18286, 24.97064, or long-press the spot in Google Maps and copy the numbers.';return null}
+ if(gpsMark)map.removeLayer(gpsMark);gpsMark=L.circleMarker(c,{radius:9,color:'#ff2d55',weight:3,fillOpacity:.15}).addTo(map);map.setView(c,Math.max(map.getZoom(),16));return c}
+$('gpsShow').addEventListener('click',()=>{const c=gpsTarget();if(c)$('gpsMsg').textContent='Marked '+c[0].toFixed(5)+', '+c[1].toFixed(5)+' on the map.'});
+$('gpsMe').addEventListener('click',()=>{if(!window.isSecureContext){$('gpsMsg').textContent='Chrome only shares your location with pages opened from a web address (https), not from Downloads. Open the app from its tiiny.host link to use this, or paste coordinates.';return}
+ if(!navigator.geolocation){$('gpsMsg').textContent='Location isn\'t available in this view. Paste coordinates instead.';return}
+ $('gpsMsg').textContent='Getting your location…';navigator.geolocation.getCurrentPosition(p=>{$('gpsIn').value=p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6);gpsTarget();$('gpsMsg').textContent='Location found (±'+Math.round(p.coords.accuracy)+' m).'},
+  ()=>{$('gpsMsg').textContent='Chrome didn\'t give a location here (pages opened from Downloads usually can\'t). Paste coordinates instead.'},{enableHighAccuracy:true,timeout:15000})});
+document.querySelectorAll('button[data-gps]').forEach(b=>b.addEventListener('click',()=>{const c=gpsTarget();if(!c)return;const cls=b.dataset.gps,note=$('gpsNote').value.trim();
+ if(!OM){$('gpsMsg').textContent='Wait for the data to load, then try again.';return}
+ logReport(cls,c[0],c[1],'coordinates',note);EV['pt-'+Date.now()]={cls,src:'you',conf:1,t:Date.now(),lat:c[0],lon:c[1]};saveEV();drawUser();recompute();
+ const inside=c[0]>BB.s&&c[0]<BB.n&&c[1]>BB.w&&c[1]<BB.e;$('gpsMsg').textContent='Logged “'+CLS[cls].lab+'” at '+c[0].toFixed(5)+', '+c[1].toFixed(5)+(inside?'':' (outside the street-level map, so the model there is rougher)')+'.';$('gpsNote').value=''}));
+$('logCopy').addEventListener('click',async()=>{const t='DRYLOG '+JSON.stringify({app:'4.7',spots:SITES.map(s=>({name:s.name,lat:s.lat,lon:s.lon,wmax:s.wmax,alb:s.alb})),log:RLOG});const ok=await copyText(t);
+ $('logCopy').textContent=ok?'Copied '+RLOG.length+' reports':'Select the text below';const pre=$('logTxt');pre.textContent=t;pre.style.display=ok?'none':'block'});
+$('logClear').addEventListener('click',()=>{if($('logClear').dataset.sure){RLOG=[];ls.set('dryLog','[]');renderLog();$('logClear').textContent='Clear log';delete $('logClear').dataset.sure}else{$('logClear').dataset.sure=1;$('logClear').textContent='Tap again to clear'}});
+renderLog();
+$('backup').addEventListener('click',async()=>{const data={v:1,spots:SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind})=>({id,name,lat,lon,kind})),pos:Object.fromEntries(SITES.filter(s=>!s.custom).map(s=>[s.id,[s.lat,s.lon]])),hidden:HIDDEN};
+ const t='DRYSPOTS '+JSON.stringify(data);$('bkBox').style.display='';$('bkTxt').value=t;$('bkLoad').style.display='none';const ok=await copyText(t);
+ $('bkMsg').textContent=ok?'Copied. Paste it somewhere safe, like a note or a message to yourself.':'Copy this text and keep it somewhere safe.'});
+$('restoreBtn').addEventListener('click',()=>{$('bkBox').style.display='';$('bkTxt').value='';$('bkMsg').textContent='Paste a backup below, then tap Load.';$('bkLoad').style.display=''});
+$('bkLoad').addEventListener('click',()=>{try{const t=$('bkTxt').value.trim().replace(/^DRYSPOTS\s*/,''),d=JSON.parse(t);if(!d||d.v!==1)throw 0;
+  for(let i=SITES.length-1;i>=0;i--)if(SITES[i].custom)SITES.splice(i,1);
+  for(const c of d.spots||[]){const kind=KINDS[c.kind]?c.kind:'plaza';if(typeof c.lat!=='number'||typeof c.lon!=='number')continue;SITES.push({id:String(c.id),name:String(c.name).slice(0,40),lat:c.lat,lon:c.lon,kind,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:2,sea:null,shelter:.8,shade:.8})}
+  for(const s of SITES)if(!s.custom&&d.pos&&Array.isArray(d.pos[s.id])){s.lat=+d.pos[s.id][0];s.lon=+d.pos[s.id][1]}
+  HIDDEN=Array.isArray(d.hidden)?d.hidden.map(String):[];for(let i=SITES.length-1;i>=0;i--)if(HIDDEN.includes(SITES[i].id))SITES.splice(i,1);
+  saveSpots();savePos();$('bkMsg').textContent='Backup loaded.';$('bkLoad').style.display='none';resim()}catch(e){$('bkMsg').textContent='That doesn\'t look like a backup from this app.'}});
+$('radPlay').addEventListener('click',()=>{if(radAnim){clearInterval(radAnim);radAnim=null;$('radPlay').textContent='▶ Play last 2 h';radarTime();return}
+ const end=rad5();let t=end-7200;$('radPlay').textContent='■ Stop';radShow(t);radAnim=setInterval(()=>{t+=600;if(t>end)t=end-7200;radShow(t)},900)});
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){}
+ const ta=document.createElement('textarea');ta.value=t;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.top='0';ta.style.opacity='0';document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();return ok}
+$('copyTest').addEventListener('click',async()=>{const t=testRows.map(r=>r.join(' | ')).join('\n')+'\nSources: '+Object.entries(src).map(([k,v])=>k+': '+(v===true?'ok':v)).join('; ')+'\nCover: '+JSON.stringify(coverInfo)+'\nRadar gauge factor: '+gCorr.toFixed(2);
+ const ok=await copyText(t);$('copyTest').textContent=ok?'Copied':'Select the text below';const pre=$('testTxt');pre.textContent=t;pre.style.display=ok?'none':'block'});
+const hiLayer=L.layerGroup().addTo(map),userLayer=L.layerGroup().addTo(map);
+function drawUser(){userLayer.clearLayers();const now=Date.now();for(const[id,e]of Object.entries(EV))if(id.startsWith('pt-')&&now-e.t<3*3600e3)
+ L.marker([e.lat,e.lon],{icon:L.divIcon({className:'',html:'<div style="width:14px;height:14px;transform:rotate(45deg);background:'+CLS[e.cls].c+';border:2px solid #fff;box-shadow:0 0 2px #000"></div>',iconSize:[14,14]})}).addTo(userLayer).bindTooltip('You: '+CLS[e.cls].lab+' ('+Math.round((now-e.t)/6e4)+' min ago)')}
+function cellBounds(k){const j=Math.floor(k/NX),i=k-j*NX,dy=(BB.n-BB.s)/NY,dx=(BB.e-BB.w)/NX;return[[BB.n-(j+1)*dy,BB.w+i*dx],[BB.n-j*dy,BB.w+(i+1)*dx]]}
+function nearestGround(k){if(!haveCover||!(WAT[k]>140||BLD[k]>200))return k;const j0=Math.floor(k/NX),i0=k-j0*NX;let best=-1,bd=1e9;
+ for(let dj=-3;dj<=3;dj++)for(let di=-3;di<=3;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=NX||j>=NY)continue;const q=j*NX+i;if(WAT[q]>140||BLD[q]>200)continue;const d=di*di+dj*dj+(ROAD&&ROAD[q]>40?-.5:0);if(d<bd){bd=d;best=q}}return best}
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-rep]');if(!b)return;const id='pt-'+Date.now();
+ logReport(b.dataset.rep,+b.dataset.lat,+b.dataset.lon,'map');EV[id]={cls:b.dataset.rep,src:'you',conf:1,t:Date.now(),lat:+b.dataset.lat,lon:+b.dataset.lon};saveEV();map.closePopup();drawUser();recompute()});
+map.on('click',e=>{const{lat,lng}=e.latlng;
+ if(addMode){addMode=false;$('prog').className='';$('prog').textContent='';const la=+lat.toFixed(5),lo=+lng.toFixed(5);
+  L.popup().setLatLng(e.latlng).setContent('<div class="newspot" style="min-width:220px"><b>New spot</b><input type="text" placeholder="Name, e.g. Kumpula street" style="margin:6px 0"><select style="width:100%">'+Object.entries(KINDS).map(([k,v])=>'<option value="'+k+'">'+v.lab+'</option>').join('')+'</select><div class="btns"><button data-newspot="1" data-lat="'+la+'" data-lon="'+lo+'">Save spot</button></div></div>').openOn(map);return}
+ if(moveId){const s=SITES.find(x=>x.id===moveId);s.lat=+lat.toFixed(5);s.lon=+lng.toFixed(5);moveId=null;$('prog').className='';$('prog').textContent='';savePos();saveSpots();resim();return}
+ if(!PG)return;const k0=cellOf(lat,lng),h=hi();if(k0<0)return;const k=nearestGround(k0);hiLayer.clearLayers();
+ if(k<0){L.popup().setLatLng(e.latlng).setContent(WAT[k0]>140?'Water':'Inside a building block, about '+BH50[k0]+' m tall').openOn(map);return}
+ const cb=cellBounds(k),cc=[(cb[0][0]+cb[1][0])/2,(cb[0][1]+cb[1][1])/2];
+ L.rectangle(cb,{color:'#ff2d55',weight:3,fill:true,fillOpacity:.08,interactive:false}).addTo(hiLayer);
+ if(k!==k0)L.polyline([[lat,lng],cc],{color:'#ff2d55',weight:2,dashArray:'4 4',interactive:false}).addTo(hiLayer);
+ const o=(h-DW0)*N+k,F=COARSE[CI[k]],b=bin16(F.wind_direction_10m[h]),P=profOf(k,null,lat,lng),u=F.wind_speed_10m[h]*clamp(.75+.7*P.open(b)-P.obs(b),.2,1.35),ra=RAD.get(h);
+ const rep='<div class="small" style="margin-top:6px">What do you see here?</div><div class="btns">'+[['dry','Dry'],['mostly','Mostly dry'],['damp','Patchy wet'],['wet','Wet']].map(([v,l])=>'<button data-rep="'+v+'" data-lat="'+cc[0]+'" data-lon="'+cc[1]+'">'+l+'</button>').join('')+'</div>';
+ L.popup({offset:[0,-4]}).setLatLng(cc).setContent('<b>'+Math.round(PG[o]/2.55)+'% of surface dry</b> in the outlined 50 m square'+(k!==k0?' (nearest open ground to where you tapped)':'')+(ROAD&&ROAD[k]>40?' · on a street':'')+(SG[o]===1?'<br><b>Snow on the surface</b>':SG[o]===2?'<br><b>Ice on the surface</b>':'')+(SG[o]?'':'<br>'+(WG[o]>0?'Wet parts: <b>'+WETL[wetLv(WG[o]/100,2)].lab+'</b> ('+(WG[o]/100).toFixed(2)+' mm)':'No water on the surface'))+'<br>Pavement '+(TG[o]/10).toFixed(1)+' °C<br>Local wind '+u.toFixed(1)+' m/s'
+  +(ra?'<br>Radar rain that hour '+(radS(ra,P.rx,P.ry)*gCorr).toFixed(2)+' mm':'')
+  +(haveCover?'<br>Buildings '+Math.round(BLD[k]/2.55)+'% (up to '+BH50[k]+' m) · trees '+Math.round(TRE[k]/2.55)+'%<br>Open sky '+SVF[k]+'% · sunlit '+Math.round(SUNSH[k]/2.55)+'% of daylight today':'')+rep).openOn(map)});
+map.on('popupclose',()=>hiLayer.clearLayers());
+
+/* ================= load ================= */
+let coverP=null;
+async function load(){
+ if(busy)return;$('headline').textContent='Loading live data…';
+ const job=async(name,fn)=>{src[name]='…';chips();try{await fn();src[name]=true}catch(e){src[name]=why(e)}chips()};
+ const part=(name,v)=>{src[name]=v;chips()};
+ src={};OM=null;
+ if(!coverP)coverP=(async()=>{try{await loadCover(part)}catch(e){}})();
+ await Promise.all([job('Open-Meteo forecast',loadOM),job('FMI weather stations',async()=>{try{await loadStationsFMI()}catch(e){await loadFMI();throw new Error('only Kumpula: '+why(e))}}),job('FMI Harmonie forecast',loadHarm),job('Fintraffic road sensors',loadStations),job('Fintraffic cameras',loadCams)]);
+ if(!OM)await job('MET Norway forecast (backup)',loadMetNo);
+ if(!OM){const all=Object.values(src).every(v=>v!==true);
+  $('headline').textContent=all?'This view is blocking internet access, so no data could load. Open the page in Chrome or Safari.':'The forecast services could not be reached. Press Refresh to try again.';return}
+ const n=Date.now()/1000;nowIdx=0;T.forEach((t,i)=>{if(t<=n)nowIdx=i});H0=Math.max(0,nowIdx-48);H1=Math.min(T.length-1,nowIdx+36);DW0=nowIdx-24;
+ blendHarm();buildResid();if(omModel)src['Forecast: '+omModel+(HARM?' + FMI Harmonie':'')+(STNS.length?', corrected by '+RESID.length+' FMI stations':'')]=true;
+ buildForcing();evidenceList();RES={};for(const s of SITES)RES[s.id]=simSite(s);renderSites();renderCond();drawStations();
+ $('headline').textContent='Spots ready, reading radar and building the map…';
+ await job('FMI rain radar',loadRadar);if(src['FMI rain radar']!==true){RAD=new Map();radarNum=false;src['FMI rain radar (map only)']=true}
+ await coverP;if(!haveCover){coverP=null;src['Buildings & trees']='unavailable'}else src['Buildings & trees: '+(coverInfo.bld||'?')+', heights: '+(coverInfo.hgt||'?')]=true;chips();
+ orderCams();camCards();
+ evidenceList();RES={};for(const s of SITES)RES[s.id]=simSite(s);
+ busy=true;try{await runGrid()}finally{busy=false}renderAll();
+ if($('autoClaude').checked&&ls.get('dryKey'))claudeAll()}
+load();setInterval(()=>{if(!busy)load()},10*60e3);
+}
+</script>
+</body>
+</html>
