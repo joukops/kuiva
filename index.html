@@ -557,7 +557,7 @@ function nudges(lat,lon){let sw=0,sW=0,sS=0,sI=0,ow=0,oo=0;
 function profOf(k,site,lat,lon){
  const rxy=radXY(lat,lon),base={alb:site?.alb??.1,wmax:site?.wmax??2,maint:site?site.maint:true,ri:radOf(lat,lon),rx:rxy[0],ry:rxy[1]};
  if(haveCover&&k>=0)return{...base,open:b=>OPEN[k*16+b]/100,obs:b=>OBS[k*16+b]/100,horB:b=>HORB[k*16+b]/2,horT:b=>HORT[k*16+b]/2,sv:SVF[k]/100,tree:TRE[k]/255,
-  tf:site?(site.tf??0):(ROAD?clamp(ROAD[k]/255,0,1)*.35:.15),hw:(()=>{let m=0;for(let b=0;b<16;b++)m+=HORB[k*16+b]/2;return clamp(Math.tan(m/16*R),0,3)})()};
+  tf:site?(site.tf??0):0,hw:(()=>{let m=0;for(let b=0;b<16;b++)m+=HORB[k*16+b]/2;return clamp(Math.tan(m/16*R),0,3)})()};
  const s=site||{sea:null,shelter:.8,shade:.8};
  return{...base,open:b=>s.sea&&inSec(b*22.5,s.sea)?.5:0,obs:b=>s.sea&&inSec(b*22.5,s.sea)?.05:1-s.shelter,horB:()=>(1-s.shade)*30,horT:()=>0,sv:s.shade,tree:0,tf:site?(site.tf??0):.3,hw:0}}
 function sunFrac(P,sn){if(sn.el<=0)return 0;const b=bin16(sn.az);return sig((sn.el-P.horB(b))/1.2)*(1-TOPAC*(1-sig((sn.el-P.horT(b))/1.2)))}
