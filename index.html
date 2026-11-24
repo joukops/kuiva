@@ -65,6 +65,7 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
 .camic{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 2px #000}
 .wa{display:flex;flex-direction:column;align-items:center;font:700 11px Barlow,sans-serif;color:#111;text-shadow:0 0 2px #fff,0 0 2px #fff}
 .leaflet-image-layer{image-rendering:auto!important}
+#map{position:relative}.gpsbtn{position:absolute;z-index:1000;right:10px;bottom:34px;width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;background:#fff;color:#444;border:0;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}.gpsbtn.on{color:#1a73e8}.gpsbtn.show{color:#5f6368}.medot{width:16px;height:16px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.5)}
 #testOut td{font-size:14px}
 @media(max-width:600px){.pct{font-size:38px}#map{height:58vh}}
 </style>
@@ -178,13 +179,14 @@ const SITES=[
  {id:'hanl',name:'Hanasaarenlaituri',lat:60.179704,lon:24.9667747,sea:[150,300],shelter:.85,shade:.85,maint:true,kind:'plaza'},
  {id:'merl',name:'Merihaanlaituri (cycle path)',lat:60.1783538,lon:24.9619812,sea:[90,240],shelter:.85,shade:.85,wmax:1.5,maint:true,kind:'plaza'},
  {id:'suvp',name:'Suvilahti parkkis',lat:60.1863177,lon:24.9724737,sea:null,shelter:.85,shade:.9,wmax:2,maint:true,tf:.2,kind:'plaza'},
- {id:'suvd',name:'Suvilahti DIY (concrete)',lat:60.1857361,lon:24.9739861,sea:null,shelter:.85,shade:.9,wmax:1.3,alb:.3,maint:false,kind:'field'},
- {id:'kt2',name:'Kansalaistori (stone)',lat:60.1733121,lon:24.9371212,sea:null,shelter:.55,shade:.75,wmax:1.2,alb:.2,maint:true,kind:'plaza'}];
+ {id:'suvd',name:'Suvilahti DIY (concrete)',lat:60.1857361,lon:24.9739861,sea:null,shelter:.85,shade:.9,wmax:1.3,alb:.3,maint:false,kind:'field'}];
 const DEFSPOTS=SITES.map(s=>({...s}));const DEFPOS=Object.fromEntries(SITES.map(s=>[s.id,[s.lat,s.lon]]));
 const KINDS={plaza:{lab:'Plaza or path (no cars)',tf:0,maint:true,wmax:2},street:{lab:'Street with traffic',tf:1,maint:true,wmax:2},field:{lab:'Open field, not cleared of snow',tf:0,maint:false,wmax:2}};
 let AVGEX=['kt2'];try{const v=localStorage.getItem('dryAvgEx');if(v)AVGEX=JSON.parse(v)}catch(e){}
 let HIDDEN=[];try{HIDDEN=JSON.parse(localStorage.getItem('dryHidden')||'[]')}catch(e){}
-try{for(const c of JSON.parse(localStorage.getItem('drySpots')||'[]'))SITES.push({...c,custom:true,maint:KINDS[c.kind]?.maint??true,tf:KINDS[c.kind]?.tf??0,wmax:2,sea:null,shelter:.8,shade:.8})}catch(e){}
+try{let cs=JSON.parse(localStorage.getItem('drySpots')||'[]');
+ if(!localStorage.getItem('drySeedKt')){if(!cs.some(c=>c.id==='kt2'))cs.push({id:'kt2',name:'Kansalaistori (stone)',lat:60.1733121,lon:24.9371212,kind:'plaza',wmax:1.2,alb:.2});localStorage.setItem('drySpots',JSON.stringify(cs));localStorage.setItem('drySeedKt','1')}
+ for(const c of cs)if(!SITES.some(s=>s.id===c.id))SITES.push({...c,custom:true,maint:KINDS[c.kind]?.maint??true,tf:KINDS[c.kind]?.tf??0,wmax:c.wmax??2,alb:c.alb,sea:null,shelter:.8,shade:.8})}catch(e){}
 for(let i=SITES.length-1;i>=0;i--)if(HIDDEN.includes(SITES[i].id))SITES.splice(i,1);
 const EXT=[
  {id:'x-hana',name:'Hanasaari power plant, toward Kalasatama and Redi',url:'https://www.webcamtaxi.com/en/finland/uusimaa/helsinki-kalasatama-hanasaari-power-plant.html',lat:60.1862,lon:24.9790},
@@ -717,7 +719,7 @@ function renderSites(){
  $('sites').innerHTML=avgCard+SITES.map(s=>{const r=RES[s.id];if(!r)return'';const p=r.p[h],c=CLS[r.cls[h]];
   let rr='';if(RAD.size){let s24=0;for(let i=nowIdx-23;i<=nowIdx;i++){const a2=RAD.get(i);if(a2)s24+=radS(a2,r.P.rx,r.P.ry)*gCorr}rr=' · radar rain 24 h '+s24.toFixed(1)+' mm'}
   const cov=haveCover&&r.k>=0?' · open sky '+SVF[r.k]+'%'+(SUN[h].el>0?' · sun now '+Math.round(r.sf[h]*100)+'%':''):'';
-  return'<article class="card site"><div class="top"><div><h2 style="margin:0">'+esc(s.name)+'</h2><span class="state" style="background:'+c.c+'">'+c.lab+'</span></div><div class="pct" style="color:'+rgb(p)+'">'+Math.round(p*100)+'%</div></div>'
+  return'<article class="card site"><div class="top"><div><h2 style="margin:0;cursor:pointer;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px" data-goto="'+s.id+'" title="Show on map">'+esc(s.name)+'</h2><span class="state" style="background:'+c.c+'">'+c.lab+'</span></div><div class="pct" style="color:'+rgb(p)+'">'+Math.round(p*100)+'%</div></div>'
   +'<p class="meta" style="color:var(--ink)">'+(r.cls[h]==='snow'||r.cls[h]==='ice'?'Surface: <b>'+c.lab+'</b>':wetTxt(r.W[h],r.P.wmax))+'</p>'
   +'<p class="meta">Pavement '+r.Ts[h].toFixed(1)+' °C · local wind '+r.u[h].toFixed(1)+' m/s'+cov+rr+(r.S[h]>.05?' · snow '+r.S[h].toFixed(1)+' mm':'')+'</p>'
   +'<p class="meta" style="margin-top:0">'+esc(whyText(s,r))+'</p>'
@@ -843,13 +845,16 @@ $('cams').addEventListener('click',async e=>{const b=e.target.closest('button');
  else if(b.dataset.a){if(await askClaude(k)){renderCams();recompute()}}});
 $('ext').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const x=EXT[+b.dataset.e];
  if(b.dataset.m)EV[x.id]={cls:b.dataset.m,src:'you',conf:1,t:Date.now()};else delete EV[x.id];saveEV();renderCams();recompute()});
-function saveSpots(){ls.set('drySpots',JSON.stringify(SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind})=>({id,name,lat,lon,kind}))));ls.set('dryHidden',JSON.stringify(HIDDEN))}
+function saveSpots(){ls.set('drySpots',JSON.stringify(SITES.filter(s=>s.custom).map(({id,name,lat,lon,kind,wmax,alb})=>({id,name,lat,lon,kind,wmax,alb}))));ls.set('dryHidden',JSON.stringify(HIDDEN))}
 let addMode=false;
 $('addSpot').addEventListener('click',()=>{addMode=!addMode;moveId=null;const p=$('prog');if(addMode){p.className='move';p.textContent='Tap the map where your new spot is.';map.getContainer().scrollIntoView({behavior:'smooth'})}else{p.className='';p.textContent=''}});
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-newspot]');if(!b)return;const f=b.closest('div.newspot'),nm=(f.querySelector('input').value||'').trim().slice(0,40)||'My spot',kind=f.querySelector('select').value;
  const s={id:'c'+Date.now(),name:nm,lat:+b.dataset.lat,lon:+b.dataset.lon,kind,custom:true,maint:KINDS[kind].maint,tf:KINDS[kind].tf,wmax:2,sea:null,shelter:.8,shade:.8};
  SITES.push(s);saveSpots();map.closePopup();if(OM){RES[s.id]=simSite(s);renderSites();renderMap();renderAll()}});
-$('sites').addEventListener('click',e=>{const rm=e.target.closest('button[data-rm]');if(rm){const i=SITES.findIndex(x=>x.id===rm.dataset.rm);if(i<0)return;const s=SITES[i];SITES.splice(i,1);if(!s.custom)HIDDEN.push(s.id);delete RES[s.id];saveSpots();ls.set('dryPos4',JSON.stringify(Object.fromEntries(SITES.map(x=>[x.id,[x.lat,x.lon]]))));renderSites();renderMap();renderAll();return}
+function gotoSpot(s){map.getContainer().scrollIntoView({behavior:'smooth',block:'start'});map.setView([s.lat,s.lon],17);
+ hiLayer.clearLayers();L.circleMarker([s.lat,s.lon],{radius:22,color:'#ff2d55',weight:3,fill:false,interactive:false}).addTo(hiLayer);setTimeout(()=>hiLayer.clearLayers(),3500)}
+$('sites').addEventListener('click',e=>{const g=e.target.closest('[data-goto]');if(g){const s=SITES.find(x=>x.id===g.dataset.goto);if(s)gotoSpot(s);return}
+ const rm=e.target.closest('button[data-rm]');if(rm){const i=SITES.findIndex(x=>x.id===rm.dataset.rm);if(i<0)return;const s=SITES[i];SITES.splice(i,1);if(!s.custom)HIDDEN.push(s.id);delete RES[s.id];saveSpots();ls.set('dryPos4',JSON.stringify(Object.fromEntries(SITES.map(x=>[x.id,[x.lat,x.lon]]))));renderSites();renderMap();renderAll();return}
  const b=e.target.closest('button[data-mv]');if(!b)return;moveId=moveId===b.dataset.mv?null:b.dataset.mv;
  const p=$('prog');if(moveId){p.className='move';p.textContent='Tap the map where '+SITES.find(s=>s.id===moveId).name+' is.';map.getContainer().scrollIntoView({behavior:'smooth'})}else{p.className='';p.textContent=''}renderSites()});
 function savePos(){ls.set('dryPos4',JSON.stringify(Object.fromEntries(SITES.map(s=>[s.id,[s.lat,s.lon]]))))}
@@ -929,6 +934,21 @@ map.on('click',e=>{const{lat,lng}=e.latlng;
   +(ra?'<br>Radar rain that hour '+(radS(ra,P.rx,P.ry)*gCorr).toFixed(2)+' mm':'')
   +(haveCover?'<br>Buildings '+Math.round(BLD[k]/2.55)+'% (up to '+BH50[k]+' m) · trees '+Math.round(TRE[k]/2.55)+'%<br>Open sky '+SVF[k]+'% · sunlit '+Math.round(SUNSH[k]/2.55)+'% of daylight today':'')+rep).openOn(map)});
 map.on('popupclose',()=>hiLayer.clearLayers());
+{const b=document.createElement('button');b.className='gpsbtn';b.title='Show my location';b.setAttribute('aria-label','Show my location');
+ b.innerHTML='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
+ map.getContainer().appendChild(b);if(L.DomEvent)L.DomEvent.disableClickPropagation(b);
+ let mode=0,watch=null,dot=null,acc=null,last=null;const meLayer=L.layerGroup().addTo(map);
+ const setMode=m=>{mode=m;b.classList.toggle('on',m===1);b.classList.toggle('show',m===2)};
+ const stop=()=>{if(watch!=null)navigator.geolocation.clearWatch(watch);watch=null;meLayer.clearLayers();dot=null;acc=null;last=null;setMode(0)};
+ const fix=p=>{last=[p.coords.latitude,p.coords.longitude];meLayer.clearLayers();
+  L.circle(last,{radius:p.coords.accuracy,color:'#1a73e8',weight:1,fillColor:'#1a73e8',fillOpacity:.12,interactive:false}).addTo(meLayer);
+  L.marker(last,{interactive:false,icon:L.divIcon({className:'',html:'<div class="medot"></div>',iconSize:[16,16]})}).addTo(meLayer);
+  $('gpsIn').value=last[0].toFixed(6)+', '+last[1].toFixed(6);if(mode===1)map.setView(last,Math.max(map.getZoom(),17))};
+ b.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();
+  if(mode===1){stop();return}if(mode===2&&last){setMode(1);map.setView(last,Math.max(map.getZoom(),17));return}
+  if(!window.isSecureContext||!navigator.geolocation){prog('Location only works when the app is opened from its web address (https).');return}
+  setMode(1);prog('Finding your location…');watch=navigator.geolocation.watchPosition(p=>{prog('');fix(p)},err=>{prog(err.code===1?'Location permission was denied. Allow it for this site in Chrome settings.':'Couldn\'t get your location.');stop()},{enableHighAccuracy:true,maximumAge:10000,timeout:20000})});
+ map.on('dragstart',()=>{if(mode===1)setMode(2)})}
 
 /* ================= load ================= */
 let coverP=null;
