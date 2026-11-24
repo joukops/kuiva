@@ -611,13 +611,16 @@ function sim(lat,lon,P,F,out){
    if((S>0||I>0)&&TL[0]>0){let m=TL[0]*CDZ[0]/334000;TL[0]=0;const a=Math.min(S,m);S-=a;m-=a;const c3=Math.min(I,m);I-=c3;m-=c3;W+=a+c3;if(m>0)TL[0]=m*334000/CDZ[0]}
    if(TL[0]<0&&W>0){I+=W;W=0}}
   if(i===nowIdx){if(nd.roadT!=null){const off=nd.roadT-TL[0];for(let k=0;k<NL;k++)TL[k]+=off*SHF[k];
+    if(nd.roadT>=.5&&I>0){W+=I;I=0}
     if((S>0||I>0)&&TL[0]>0){let m=TL[0]*CDZ[0]*3/334000;const a=Math.min(S,m);S-=a;m-=a;const c3=Math.min(I,m);I-=c3;W+=a+c3}}
    if(nd.sw>0){W=(W+nd.sW)/(1+nd.sw);S=(S+nd.sS)/(1+nd.sw);I=(I+nd.sI)/(1+nd.sw)}}
   const ts=TL[0];let q=shareOf(W),c=q>=.85?'dry':q>=.5?'mostly':q>=.2?'damp':'wet';
   if(S>.3){q=Math.min(q,.02);c='snow'}else if(I>.05){q=Math.min(q,.02);c='ice'}
   if(i>nowIdx){const pp=(ra&&i<=nowIdx+1)?0:Math.max(F.precipitation_probability[i]||0,F.precipitation_probability[i-1]||0)/100;q*=1-.6*pp;q=.5+(q-.5)*(1-Math.min(.7,Math.min(.4,(i-nowIdx)/72)+(DIS?.5*DIS[i]:0)))}
   out(i,q,W,S,ts,c,u,sf,pr,I)}}
-function simSite(s){const k=cellOf(s.lat,s.lon),P=profOf(k,s,s.lat,s.lon),F=forcing(s.lat,s.lon),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],F,P,k};
+function openCell(k){if(k<0||!haveCover||(BLD[k]<100&&WAT[k]<140))return k;const j0=Math.floor(k/NX),i0=k-j0*NX;let best=k,bd=1e9;
+ for(let dj=-2;dj<=2;dj++)for(let di=-2;di<=2;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=NX||j>=NY)continue;const q=j*NX+i;if(BLD[q]>=100||WAT[q]>=140)continue;const d=di*di+dj*dj;if(d<bd){bd=d;best=q}}return best}
+function simSite(s){const k=openCell(cellOf(s.lat,s.lon)),P=profOf(k,s,s.lat,s.lon),F=forcing(s.lat,s.lon),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],F,P,k};
  sim(s.lat,s.lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.S[i]=S;r.Ts[i]=ts;r.cls[i]=c;r.u[i]=u;r.sf[i]=sf;r.pr[i]=pr});return r}
 const masked=k=>haveCover&&(WAT[k]>140||BLD[k]>200||(pavedOnly&&ROAD&&IMP&&ROAD[k]+IMP[k]<30));
 async function runGrid(){
