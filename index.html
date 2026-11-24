@@ -259,12 +259,12 @@ const streets=L.tileLayer(ESRI+'World_Street_Map/MapServer/tile/{z}/{y}/{x}',{ma
 const sat=L.tileLayer(ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'});
 const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,referrerPolicy:'strict-origin-when-cross-origin',attribution:'© OpenStreetMap contributors'});
 const bases={'Grey (street names)':grey,'Streets (detailed)':streets,'Satellite':sat,'OpenStreetMap':osm};
-(bases[ls.get('dryBase')]||streets).addTo(map);
+(bases[ls.get('dryBase2')]||osm).addTo(map);
 const radarLayer=L.tileLayer.wms(FMIW,{layers:RLAY,format:'image/png',transparent:true,opacity:.7,attribution:'Radar © FMI',zIndex:5});
 const siteLayer=L.layerGroup().addTo(map),stnLayer=L.layerGroup().addTo(map),stnLbl=L.layerGroup(),camLayer=L.layerGroup().addTo(map),windLayer=L.layerGroup();
 const overlay=L.imageOverlay('data:image/gif;base64,R0lGODlhAQABAAAAACw=',[[BB.s,BB.w],[BB.n,BB.e]],{opacity:.62});if(ls.get('dryHeatOff')!=='1')overlay.addTo(map);
 L.control.layers(bases,{'Heat map (selected layer)':overlay,'Rain radar (FMI)':radarLayer,'Your spots':siteLayer,'Road sensors':stnLayer,'Sensor readings':stnLbl,'Cameras':camLayer,'Wind arrows':windLayer},{collapsed:true}).addTo(map);
-map.on('baselayerchange',e=>ls.set('dryBase',e.name));
+map.on('baselayerchange',e=>ls.set('dryBase2',e.name));
 map.on('overlayadd',e=>{if(e.layer===windLayer)drawWind();if(e.layer===stnLbl)drawStations();if(e.layer===radarLayer)radarTime()});
 map.on('overlayremove',e=>{if(e.layer===radarLayer)radSync();if(e.layer===overlay)ls.set('dryHeatOff','1')});
 map.on('overlayadd',e=>{if(e.layer===overlay)ls.set('dryHeatOff','0')});
