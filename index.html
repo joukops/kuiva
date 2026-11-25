@@ -168,6 +168,7 @@ details{margin-top:10px}summary{cursor:pointer;font-weight:600;min-height:32px}
     <p class="small"><b>Drying: FMI RoadSurf physics.</b> Each 50 m cell runs a version of the Finnish Meteorological Institute's open-source RoadSurf road weather model (Karsisto 2024), in 20-minute steps from two days back to a day and a half ahead. It balances sunshine, sky and ground heat radiation, heat exchange with the air (driven by wind speed, with RoadSurf's stability corrections) and evaporation against heat conducted through eight road layers. That gives the pavement temperature, including the warmth stored in the asphalt. Water follows RoadSurf's rules: up to 1 mm held in the asphalt's pores plus 1 mm on top, evaporation only when the pavement is at least 0.25 °C and free of snow and ice, instant freezing below 0 °C, gradual melting, rain/sleet/snow split by temperature and humidity, and traffic wearing water, snow and ice off streets (not off plazas and paths). The road layer properties and the conversion from water amount to "share of surface dry" (about 80% dry at 0.08 mm, 50% at 0.25 mm) are my own estimates, because RoadSurf doesn't publish them. Your Dry / Mostly dry / Patchy / Wet reports on the map correct it locally.</p>
     <p class="small"><b>Second core model: SUEWS-style.</b> The Model switch replaces RoadSurf with a simplified version of the Surface Urban Energy and Water balance Scheme (SUEWS). A paved surface holds about 0.5 mm of water (SUEWS's default store), and anything above drains within minutes. Evaporation is driven by the wind and by the difference between the air's moisture and the vapour pressure at the pavement surface, in proportion to how wet the surface is. The surface temperature comes from the energy balance, so a pavement that cools to the dew point at night stops drying, and below it collects dew. (Standard SUEWS uses the air temperature here, which lets it keep drying all night; this version deliberately differs.) Heat stored in the pavement uses SUEWS's hysteresis method (OHM) instead of a layered road. It has no layered ground model, so ice is flagged only when the air and the estimated surface are at or below freezing. Both cores share all inputs, shading, wind and your reports. </p>
     <p class="small"><b>Third core model: METRo-style.</b> After Environment Canada's road-weather model METRo. Like RoadSurf it calculates heat flowing through the pavement layer by layer, but it handles the air–surface exchange differently: a standard bulk formula with a stability correction, which usually exchanges heat and moisture more slowly than RoadSurf in light wind. The surface holds at most 0.5 mm of liquid water and the rest runs off. Water evaporates whenever the surface is warmer than the dew point, and dew or frost forms when it is colder. It has no traffic spray. All cores share all inputs, shading, wind and your reports; spot cards show all three results and the report log records all three, so they can be compared.</p>
+    <p class="small"><b>Sea air.</b> When the wind blows off the water, air at the shore is close to sea air: in autumn and early winter warmer and more humid than inland, in spring colder. For every spot and map square the app measures how much open water lies upwind within about 2 km, weighting the nearest few hundred metres most, and shifts the local temperature and dew point toward sea air by up to 80% (less in light wind, when local effects dominate). Sea air is the measurement at FMI's Harmaja station for the past, and the forecast for the sea at Harmaja ahead, anchored to the latest measurement. When the sea freezes, the air over the ice is measured and forecast as such, so the effect fades by itself. Spot cards show how much sea air the spot is getting right now.</p>
     <p class="small"><b>Buildings and trees.</b> Building outlines and tree cover in four height classes come from HSY's land cover data. Storey counts come from the City of Helsinki building register (storeys × 3.3 m). Where those can't be loaded, OpenStreetMap is used instead. For each cell and each of 16 directions, the app finds how high the skyline rises. The sun then shines on the cell only when it's above that skyline. Bare trees let more light through in winter than in leaf. The same skyline gives the share of open sky, which sets how much the pavement cools at night. RoadSurf itself has no wind direction or neighbourhood, so the app adds street-canyon physics in the style of the Town Energy Balance (TEB) urban model: the part of the sky hidden by buildings is replaced by walls that radiate heat (slightly warmer than the air in the heating season), sunlit facades reflect light down onto the street, wind at street level is slowed by the canyon's height-to-width ratio, canyon air is a little warmer than above the roofs, and streets get a small amount of traffic heat. In addition, upwind buildings and trees shelter a cell for about ten times their height, and open water upwind speeds the wind up. Shading uses RoadSurf's own method: direct sun is switched off when the skyline in the sun's direction is higher than the sun, and diffuse light and night-time cooling are scaled by the share of open sky.</p>
     <p class="small">These are physics-based estimates that haven't been checked against measurements; use them to compare places and times. The app can't see winter grit (sepeli) or local puddles.</p>
       <p class="small"><b>Sources.</b></p>
@@ -223,6 +224,7 @@ const CX=30,CY=20,CEN=[60.177,24.95],HB={s:60.12,n:60.30,w:24.78,e:25.27},KUMPUL
 const lonOf=i=>BB.w+(i+.5)/NX*(BB.e-BB.w),latOf=j=>BB.n-(j+.5)/NY*(BB.n-BB.s);
 const cellOf=(lat,lon)=>{const i=Math.floor((lon-BB.w)/(BB.e-BB.w)*NX),j=Math.floor((BB.n-lat)/(BB.n-BB.s)*NY);return(i<0||j<0||i>=NX||j>=NY)?-1:j*NX+i};
 const radOf=(lat,lon)=>{const i=clamp(Math.floor((lon-BB.w)/(BB.e-BB.w)*RW),0,RW-1),j=clamp(Math.floor((BB.n-lat)/(BB.n-BB.s)*RH),0,RH-1);return j*RW+i};
+const SEAPT=[60.1051,24.9754];let OMSEA=null,MAR=null,MARW=null;
 const OMPTS=SITES.map(s=>[s.lat,s.lon]).concat([[60.142,24.87],[60.213,24.87],[60.142,25.05],[60.213,25.05],[60.195,24.93],[60.155,24.95],[60.20,24.99]]);
 const HV=['temperature_2m','dew_point_2m','relative_humidity_2m','precipitation','snowfall','snow_depth','precipitation_probability','cloud_cover','wind_speed_10m','wind_direction_10m','shortwave_radiation','direct_radiation','diffuse_radiation'];
 const NH=61,DD=[40,80,130,200,300,450,650],DS=[12,25,40,55,75,100,130,170,220,280];
@@ -296,9 +298,9 @@ const cv=document.createElement('canvas');cv.width=NX;cv.height=NY;
 
 /* ================= weather loaders ================= */
 async function loadOM(){
- const u='https://api.open-meteo.com/v1/forecast?latitude='+OMPTS.map(p=>p[0]).join(',')+'&longitude='+OMPTS.map(p=>p[1]).join(',')+'&hourly='+HV.join(',')+'&past_days=2&forecast_days=3&timeformat=unixtime&wind_speed_unit=ms&timezone=GMT';
+ const PTS=OMPTS.concat([SEAPT]),u='https://api.open-meteo.com/v1/forecast?latitude='+PTS.map(p=>p[0]).join(',')+'&longitude='+PTS.map(p=>p[1]).join(',')+'&hourly='+HV.join(',')+'&past_days=2&forecast_days=3&timeformat=unixtime&wind_speed_unit=ms&timezone=GMT';
  let d;try{d=await getJSON(u+'&models=metno_seamless');omModel='MET Nordic'}catch(e){d=await getJSON(u);omModel='best match'}
- if(!Array.isArray(d))d=[d];OM=d.map(x=>x.hourly);T=OM[0].time;
+ if(!Array.isArray(d))d=[d];OM=d.map(x=>x.hourly);OMSEA=OM.length>OMPTS.length?OM.pop():null;T=OM[0].time;
  for(const h of OM){for(const v of HV)if(!h[v])h[v]=[];for(let i=0;i<T.length;i++){const sw=h.shortwave_radiation[i]??0;
   if(h.direct_radiation[i]==null||h.diffuse_radiation[i]==null){const c=(h.cloud_cover[i]??70)/100,df=.25+.75*c;h.diffuse_radiation[i]=sw*df;h.direct_radiation[i]=sw*(1-df)}}}}
 async function loadMetNo(){
@@ -313,7 +315,7 @@ async function loadMetNo(){
   H.time.push(t);H.temperature_2m.push(r.T);H.dew_point_2m.push(r.Td);H.relative_humidity_2m.push(r.rh);H.precipitation.push(r.P);
   H.snowfall.push(r.T<.5?r.P/.7:0);H.snow_depth.push(o&&o.snow_aws>0?o.snow_aws/100:0);H.precipitation_probability.push(r.pp);H.cloud_cover.push(r.cc);
   H.wind_speed_10m.push(r.ws);H.wind_direction_10m.push(r.wd);H.shortwave_radiation.push(0);H.direct_radiation.push(0);H.diffuse_radiation.push(0)}
- OM=OMPTS.map(()=>H);T=H.time}
+ OM=OMPTS.map(()=>H);OMSEA=null;T=H.time}
 const fmiURL=(h)=>{const e=new Date(),s=new Date(e-h*3600e3),iso=d=>d.toISOString().slice(0,19)+'Z';return'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::observations::weather::simple&fmisid=101004&parameters=r_1h,t2m,rh,ws_10min,wd_10min,snow_aws&timestep=60&starttime='+iso(s)+'&endtime='+iso(e)};
 const FMIQ='https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=';
 function parseBs(txt){const x=new DOMParser().parseFromString(txt,'text/xml'),out=[];for(const el of x.getElementsByTagNameNS('*','BsWfsElement')){const g=n=>el.getElementsByTagNameNS('*',n)[0]?.textContent;
@@ -487,6 +489,9 @@ function deriveCover(r){
   for(let b=0;b<16;b++){let ow=0,ob=0,ws=0;for(const[di,dj,w,d]of off[b]){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=NX||jj>=NY)continue;const q=jj*NX+ii;
     ow+=w*WAT[q]/255;ob+=w*(BLD[q]/255*Math.min(1,10*BH50[q]/d)+.6*TRE[q]/255*Math.min(1,10*TH50[q]/d));ws+=w}
    OPEN[k*16+b]=ws?Math.round(100*ow/ws):0;OBS[k*16+b]=ws?Math.round(100*Math.min(1,ob/ws)):0}}
+ MARW=new Uint8Array(N*16);
+ const mo=[];for(let b=0;b<16;b++){const a=b*22.5*R,o=[];for(let d=25;d<=2000;d+=50)o.push([Math.round(d*Math.sin(a)/CELL),-Math.round(d*Math.cos(a)/CELL),Math.exp(-d/400)]);mo.push(o)}
+ for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const k=j*NX+i;for(let b=0;b<16;b++){let s=0,ws=0;for(const[di,dj,w]of mo[b]){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=NX||jj>=NY)continue;s+=w*WAT[jj*NX+ii]/255;ws+=w}MARW[k*16+b]=ws?Math.round(100*s/ws):0}}
  haveCover=true}
 
 /* ================= radar ================= */
@@ -541,6 +546,17 @@ function forcing(lat,lon){const F=forcingRaw(lat,lon);if(!RESID.length)return F;
   if(i<=nowIdx){let sw=0,sv=0;for(const x of ws){const z=x.r.wsr[i];if(Number.isFinite(z)){sw+=x.w;sv+=x.w*Math.log(z)}}if(sw)F.wind_speed_10m[i]*=Math.exp(sv/sw);
    if(near.d<6){const wd=near.r.wd[i];if(Number.isFinite(wd))F.wind_direction_10m[i]=wd;const pr=near.r.pr[i];if(Number.isFinite(pr))F.precipitation[i]=.5*F.precipitation[i]+.5*pr}}}
  return F}
+/* sea air: measured at Harmaja for the past, forecast over the sea ahead (anchored to the latest measurement) */
+function buildMarine(){const m=forcing(SEAPT[0],SEAPT[1]),Tm=Float32Array.from(m.temperature_2m),Dm=Float32Array.from(m.dew_point_2m);
+ if(OMSEA&&OMSEA.temperature_2m&&OMSEA.dew_point_2m){const oT=Tm[nowIdx]-OMSEA.temperature_2m[nowIdx],oD=Dm[nowIdx]-OMSEA.dew_point_2m[nowIdx];
+  for(let i=nowIdx+1;i<T.length;i++){const st=OMSEA.temperature_2m[i],sd=OMSEA.dew_point_2m[i];if(st==null||sd==null)continue;const e=Math.exp(-(i-nowIdx)/6);Tm[i]=st+(isFinite(oT)?oT:0)*e;Dm[i]=Math.min(Tm[i],sd+(isFinite(oD)?oD:0)*e)}}
+ MAR={T:Tm,Td:Dm}}
+function seaShare(k,s,b,u){const w=clamp((u-1)/2,0,1);if(!w)return 0;
+ if(MARW&&k>=0)return .8*w*MARW[k*16+b]/100;return s&&s.sea&&inSec(b*22.5,s.sea)?.8*w:0}
+function applyMarine(F,k,s){if(!MAR)return F;const sh=new Float32Array(T.length);
+ for(let i=H0;i<=H1;i++){const m=seaShare(k,s,bin16(F.wind_direction_10m[i]),F.wind_speed_10m[i]);sh[i]=m;if(!m)continue;
+  const t=F.temperature_2m[i]+m*(MAR.T[i]-F.temperature_2m[i]);F.dew_point_2m[i]=Math.min(t,F.dew_point_2m[i]+m*(MAR.Td[i]-F.dew_point_2m[i]));F.temperature_2m[i]=t}
+ F.sea=sh;return F}
 function buildResid(){RESID=[];for(const st of STNS){const F=forcingRaw(st.lat,st.lon),mk=()=>new Float32Array(T.length).fill(NaN),r={lat:st.lat,lon:st.lon,dT:mk(),dTd:mk(),wsr:mk(),wd:mk(),pr:mk()};let n=0;
  for(let i=0;i<=nowIdx;i++){const o=st.data[T[i]];if(!o)continue;n++;if(Number.isFinite(o.t2m))r.dT[i]=o.t2m-F.temperature_2m[i];if(Number.isFinite(o.td))r.dTd[i]=o.td-F.dew_point_2m[i];
   if(Number.isFinite(o.ws_10min)&&F.wind_speed_10m[i]>.3)r.wsr[i]=clamp(o.ws_10min/F.wind_speed_10m[i],.4,2.5);if(Number.isFinite(o.wd_10min))r.wd[i]=o.wd_10min;if(Number.isFinite(o.r_1h))r.pr[i]=Math.max(0,o.r_1h)}if(n)RESID.push(r)}}
@@ -716,7 +732,7 @@ function simRS(lat,lon,P,F,out){
   out(i,q,W,S,ts,c,u,sf,pr,I)}}
 function openCell(k){if(k<0||!haveCover||(BLD[k]<100&&WAT[k]<140))return k;const j0=Math.floor(k/NX),i0=k-j0*NX;let best=k,bd=1e9;
  for(let dj=-2;dj<=2;dj++)for(let di=-2;di<=2;di++){const i=i0+di,j=j0+dj;if(i<0||j<0||i>=NX||j>=NY)continue;const q=j*NX+i;if(BLD[q]>=100||WAT[q]>=140)continue;const d=di*di+dj*dj;if(d<bd){bd=d;best=q}}return best}
-function simSite(s){const k=openCell(cellOf(s.lat,s.lon)),P=profOf(k,s,s.lat,s.lon),F=forcing(s.lat,s.lon),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],F,P,k};
+function simSite(s){const k=openCell(cellOf(s.lat,s.lon)),P=profOf(k,s,s.lat,s.lon),F=applyMarine(forcing(s.lat,s.lon),k,s),r={p:[],W:[],S:[],Ts:[],cls:[],u:[],sf:[],pr:[],F,P,k};
  sim(s.lat,s.lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.S[i]=S;r.Ts[i]=ts;r.cls[i]=c;r.u[i]=u;r.sf[i]=sf;r.pr[i]=pr});
  r.m={};for(const c in CORES){if(c===CORE)r.m[c]=r.p;else{r.m[c]=[];sim(s.lat,s.lon,P,F,(i,q)=>{r.m[c][i]=q},c)}}return r}
 const masked=k=>haveCover&&(WAT[k]>140||BLD[k]>200||(pavedOnly&&ROAD&&IMP&&ROAD[k]+IMP[k]<30));
@@ -725,7 +741,7 @@ async function runGrid(){
  let t0=performance.now();const d0=Math.floor(nowIdx/24)*24;
  for(let k=0;k<N;k++){
   if(!(haveCover&&(WAT[k]>140||BLD[k]>200))){const j=Math.floor(k/NX),i=k-j*NX,lat=latOf(j),lon=lonOf(i);let ss=0,sn=0;
-   sim(lat,lon,profOf(k,null,lat,lon),blendF(lat,lon),(h,q,W,S,ts,c,u,sf,pr,I)=>{if(SUN[h].el>0&&h>nowIdx-24&&h<=nowIdx){ss+=sf;sn++}const x=h-DW0;if(x<0||x>=NH)return;const o=x*N+k;PG[o]=Math.round(q*255);TG[o]=Math.round(ts*10);WG[o]=Math.round(clamp(W*100,0,255));SG[o]=c==='snow'?1:c==='ice'?2:0});
+   sim(lat,lon,profOf(k,null,lat,lon),applyMarine(blendF(lat,lon),k,null),(h,q,W,S,ts,c,u,sf,pr,I)=>{if(SUN[h].el>0&&h>nowIdx-24&&h<=nowIdx){ss+=sf;sn++}const x=h-DW0;if(x<0||x>=NH)return;const o=x*N+k;PG[o]=Math.round(q*255);TG[o]=Math.round(ts*10);WG[o]=Math.round(clamp(W*100,0,255));SG[o]=c==='snow'?1:c==='ice'?2:0});
    SUNSH[k]=sn?Math.round(255*ss/sn):0}
   if(performance.now()-t0>40){prog('Computing street-level map… '+Math.round(100*k/N)+'%');await sleep(0);t0=performance.now()}}
  prog('')}
@@ -801,7 +817,7 @@ let RLOG=[];try{RLOG=JSON.parse(localStorage.getItem('dryLog')||'[]')}catch(e){R
 const REPSH={dry:1,mostly:.8,damp:.5,wet:.1,snow:0};
 const shCls=q=>q>=.85?'dry':q>=.5?'mostly':q>=.2?'damp':'wet';
 function logReport(cls,lat,lon,via,note){if(!OM)return;try{
- const k=cellOf(lat,lon),P=profOf(k,null,lat,lon),F=forcing(lat,lon),r={p:[],W:[],Ts:[],pr:[],c:[]};
+ const k=cellOf(lat,lon),P=profOf(k,null,lat,lon),F=applyMarine(forcing(lat,lon),k,null),r={p:[],W:[],Ts:[],pr:[],c:[]};
  sim(lat,lon,P,F,(i,q,W,S,ts,c,u,sf,pr)=>{r.p[i]=q;r.W[i]=W;r.Ts[i]=ts;r.pr[i]=pr;r.c[i]=c});const M={};for(const c in CORES){if(c===CORE)M[c]=r.p[nowIdx];else sim(lat,lon,P,F,(i,q)=>{if(i===nowIdx)M[c]=q},c)}
  let lr=-1;for(let i=nowIdx;i>=H0;i--)if(r.pr[i]>.05){lr=nowIdx-i;break}let r24=0;for(let i=Math.max(H0,nowIdx-23);i<=nowIdx;i++)r24+=r.pr[i]||0;
  const near=SITES.map(x=>[x.name,km(lat,lon,x.lat,x.lon)]).sort((a,b)=>a[1]-b[1])[0];
@@ -835,7 +851,7 @@ function renderSites(){
   +'<p class="meta" style="color:var(--ink)">'+(r.cls[h]==='snow'||r.cls[h]==='ice'?'Surface: <b>'+c.lab+'</b>':wetTxt(r.W[h],r.P.wmax))+'</p>'
   +'<p class="meta">Pavement '+r.Ts[h].toFixed(1)+' °C · local wind '+r.u[h].toFixed(1)+' m/s'+cov+rr+(r.S[h]>.05?' · snow '+r.S[h].toFixed(1)+' mm':'')+'</p>'
   +'<p class="meta" style="margin-top:0">'+esc(whyText(s,r))+'</p>'
-  +'<p class="meta" style="margin:0 0 6px">Models: '+Object.keys(CORES).map(c=>(c===CORE?'<b>':'')+CORES[c]+' '+Math.round(r.m[c][h]*100)+'%'+(c===CORE?'</b>':'')).join(' · ')+' dry</p>'
+  +'<p class="meta" style="margin:0 0 6px">Models: '+Object.keys(CORES).map(c=>(c===CORE?'<b>':'')+CORES[c]+' '+Math.round(r.m[c][h]*100)+'%'+(c===CORE?'</b>':'')).join(' · ')+' dry'+(r.F.sea&&r.F.sea[h]>.05?' · sea air '+Math.round(r.F.sea[h]/.8*100)+'%':'')+'</p>'
   +'<div class="meta" style="margin:0 0 8px">'+rainInfo(s.lat,s.lon).replace(/^<br>/,'')+'</div>'
   +'<p style="margin:0;font-weight:600">'+nextDry(r)+'</p>'
   +strip({p:r.p,W:r.W,wmax:r.P.wmax})
@@ -1100,7 +1116,7 @@ async function load(){
  if(!OM){const all=Object.values(src).every(v=>v!==true);
   $('headline').textContent=all?'This view is blocking internet access, so no data could load. Open the page in Chrome or Safari.':'The forecast services could not be reached. Press Refresh to try again.';return}
  const n=Date.now()/1000;nowIdx=0;T.forEach((t,i)=>{if(t<=n)nowIdx=i});H0=Math.max(0,nowIdx-48);H1=Math.min(T.length-1,nowIdx+36);DW0=nowIdx-24;
- blendHarm();blendNow();buildResid();src['Core model: '+coreLbl(CORE)]=true;if(omModel)src['Forecast: '+omModel+(HARM?' + FMI Harmonie':'')+(NOWC?' + FMI nowcast':'')+(STNS.length?', corrected by '+RESID.length+' FMI stations':'')]=true;
+ blendHarm();blendNow();buildResid();buildMarine();src['Core model: '+coreLbl(CORE)]=true;if(omModel)src['Forecast: '+omModel+(HARM?' + FMI Harmonie':'')+(NOWC?' + FMI nowcast':'')+(STNS.length?', corrected by '+RESID.length+' FMI stations':'')]=true;
  buildForcing();evidenceList();RES={};for(const s of SITES)RES[s.id]=simSite(s);renderSites();renderCond();drawStations();
  $('headline').textContent='Spots ready, reading radar and building the map…';
  await job('FMI rain radar',loadRadar);if(src['FMI rain radar']!==true){RAD=new Map();radarNum=false;src['FMI rain radar (map only)']=true}
