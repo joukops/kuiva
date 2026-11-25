@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
-/* VOICE: practical, outdoorsy, a skater's weather instrument
+/* VOICE: practical, outdoorsy, a pavement weather instrument
    IDEA: a road-weather service board: surface state per spot, like Fintraffic's
    PICTURE: the city map washed in a wet-blue to dry-ochre surface heat map, street-level
    COLOUR and TYPE: asphalt charcoal, wet blue, dry ochre; Barlow Condensed numerals (road-sign feel)
@@ -935,7 +935,7 @@ async function askClaude(k){
  const el=$('ci'+k);if(el)el.textContent='Asking Claude…';
  try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
   body:JSON.stringify({model:ls.get('dryModel')||'claude-haiku-5-5',max_tokens:200,messages:[{role:'user',content:[{type:'image',source:{type:'url',url:camURL(c)}},
-   {type:'text',text:'This is a Finnish road weather camera image ('+c.name+'). Judge the condition of the visible asphalt for inline skating. Wet: dark asphalt, glare, light reflections, spray, puddles. Dry: light grey matte asphalt. Reply with ONLY JSON: {"surface":"dry"|"damp"|"wet"|"snow"|"unknown","confidence":0-1,"note":"max 8 words"}'}]}]})});
+   {type:'text',text:'This is a Finnish road weather camera image ('+c.name+'). Judge how dry the visible asphalt surface is. Wet: dark asphalt, glare, light reflections, spray, puddles. Dry: light grey matte asphalt. Reply with ONLY JSON: {"surface":"dry"|"damp"|"wet"|"snow"|"unknown","confidence":0-1,"note":"max 8 words"}'}]}]})});
   const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);
   const o=JSON.parse((j.content?.[0]?.text||'').match(/\{[\s\S]*\}/)[0]);if(o.surface==='ice')o.surface='snow';
   if(!CLS[o.surface]){if(el)el.textContent='Claude: can\'t tell ('+(o.note||'')+')';return}
